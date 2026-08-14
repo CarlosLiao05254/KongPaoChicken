@@ -188,6 +188,7 @@ function newState(seed, name, pos){
   return {
     v:1, seed:seed, rngCalls:0,
     name:name||"你", pos:pos,            // "P" 投手 / "B" 野手
+    hand:"R", throwHand:"R",              // 打席(R/L/S開弓)／投球慣用手
     phase:"hs",                           // hs 高中 / uni 大學 / pro 職業 / done
     turn:0,                               // 高中週索引
     year:2026, age:16,                    // 高一入學
@@ -315,6 +316,11 @@ function mastReset(dateTxt, issueTxt){
   document.getElementById("mastDate").textContent = dateTxt||"—";
   document.getElementById("mastIssue").textContent = issueTxt||"";
 }
+function handLabel(){
+  if(!S) return "";
+  return S.pos==="P" ? (S.throwHand==="L"?"左投":"右投")+(S.hand==="L"?"左打":"右打")
+       : (S.hand==="S"?"左右開弓":S.hand==="L"?"左打":"右打");
+}
 function statusBar(){
   const sb=document.getElementById("statusbar");
   if(!S){ sb.innerHTML=""; mastReset("","創刊號"); return; }
@@ -322,7 +328,7 @@ function statusBar(){
   if(S.phase==="hs"){
     const t=CAL[Math.min(S.turn,CAL.length-1)];
     dateTxt = t? ("民國"+(S.year-1911)+"年・"+t.label) : "";
-    stage = t? ("高"+t.g+"　"+SCHOOL) : SCHOOL;
+    stage = (t? ("高"+t.g+"　"+SCHOOL) : SCHOOL)+"・"+handLabel();
     mastReset("西元"+S.year+"年", "第"+(S.turn+1)+"號");
   }else{
     dateTxt = "西元"+S.year+"年";
@@ -566,7 +572,8 @@ function allocMenu(back){
   };
   if(S.pos==="B"){
     buy("彈道+1","技"+c(24)+" 筋"+c(8),()=>S.traj<4&&S.expG>=c(24)&&S.expK>=c(8),()=>{S.traj++;S.expG-=c(24);S.expK-=c(8);});
-    buy("接觸+1","技"+c(18)+" 筋"+c(4),()=>S.meet<15&&S.expG>=c(18)&&S.expK>=c(4),()=>{S.meet++;S.expG-=c(18);S.expK-=c(4);});
+    (()=>{ const sw=(S.hand==="S")?1.15:1; const gc=Math.ceil(c(18)*sw), kc=Math.ceil(c(4)*sw);
+      buy("接觸+1"+(sw>1?"(開弓成本+15%)":""),"技"+gc+" 筋"+kc,()=>S.meet<15&&S.expG>=gc&&S.expK>=kc,()=>{S.meet++;S.expG-=gc;S.expK-=kc;}); })();
     buy("力量+8","筋"+c(16),()=>S.power<255&&S.expK>=c(16),()=>{S.power=Math.min(255,S.power+8);S.expK-=c(16);});
     buy("跑力+1","敏"+c(18),()=>S.run<15&&S.expS>=c(18),()=>{S.run++;S.expS-=c(18);});
     buy("肩力+1","筋"+c(10)+" 敏"+c(8),()=>S.arm<15&&S.expK>=c(10)&&S.expS>=c(8),()=>{S.arm++;S.expK-=c(10);S.expS-=c(8);});
@@ -600,631 +607,227 @@ function saveMenu(){
   sys("複製存檔碼保存；頭版選「讀取存檔」貼上即可續玩。種子："+S.seed);
   next("↩ 返回", ()=>{ if(S.phase==="hs") actionMenu(); else careerLoop(); });
 }
-/* ================= 比賽引擎 v2：配球戰術 × 方向打擊 × 特性標籤 ================= */
-/* 投球：球種→位置(內高/內低/外高/外低/紅中/壞球引誘)→力量，帶「球路記憶」——
-   同位置速差、對角攻擊、內外調動有加成；同球種同位置連投會被鎖定。
-   打擊：揮法＋方向(拉打/中間/推打)，方向押對位置有加成。
-   特性：內角職人/外角職人/速差魔術師/配球師；拉打王/推打達人/內角剋星/外角剋星…
-   由「使用習慣與成功數」自然養成。 */
+/* ================= 比賽引擎 v3：全自動加權擲骰 × 報紙式戰報 =================
+   比賽不再逐球操作：勝負由能力值、特性標籤、左右對決、狀態加權擲骰決定，
+   以報紙戰報形式呈現。特性由比賽表現自動累積（拉打安打多→拉打王…）。 */
 let M=null;
 let HOMENAME="海線";
 let TEAM_LINEUP=[
-  {n:"1棒 二壘 阿吉",q:0.8},{n:"2棒 中外野 小胖",q:0.75},{n:"3棒 一壘 廖大",q:0.8},
-  {n:"4棒(你)",q:1},{n:"5棒 三壘 泰雅",q:0.85},{n:"6棒 捕手 阿海",q:0.75},
-  {n:"7棒 右外野 阿明",q:0.7},{n:"8棒 游擊 小黑",q:0.7},{n:"9棒 左外野 阿樂",q:0.65},
+  {n:"阿吉",q:0.8},{n:"小胖",q:0.75},{n:"廖大",q:0.8},
+  {n:"(你)",q:1},{n:"泰雅",q:0.85},{n:"阿海",q:0.75},
+  {n:"阿明",q:0.7},{n:"小黑",q:0.7},{n:"阿樂",q:0.65},
 ];
 function setLineup(names,homeName){
   HOMENAME=homeName;
   TEAM_LINEUP=names.map((n,i)=>({n:n, q: i===3?1:(0.7+((i*7)%4)*0.05)}));
 }
-const ZONES=["內高","內低","外高","外低","紅中"];
-function zoneSide(z){ return z[0]==="內"?"in":z[0]==="外"?"out":"mid"; }
-function zoneHigh(z){ return z.includes("高")?"hi":z.includes("低")?"lo":"mid"; }
 function hasT(t){ return S.abil.includes(t); }
-
-function newMatch(cfg){
-  return {
-    cfg:cfg,
-    inn:1, top:true,
-    outs:0, bases:[null,null,null],
-    scoreUs:0, scoreThem:0,
-    order:0, foeOrder:0,
-    myBatSlot: S.pos==="P"? 8 : 3,
-    pitcherHp:100,
-    lastPitch:null,          // 你投球時的球路記憶
-    foeLast:null,            // 敵投手的球路記憶（打擊時）
-    foePitchCount:0, foeSwapped:false,   // 敵投手用球數／是否已換投
-    tally:{pullHit:0,pushHit:0,inHit:0,outHit:0, inPitch:0,outPitch:0,comboK:0},
-    done:false,
-    myGame:{ab:0,h:0,hr:0,rbi:0, so:0,er:0,outs:0},
-  };
-}
-function scoreBoard(){
-  out('<span class="score">'+esc(M.cfg.foe)+" "+M.scoreThem+" - "+M.scoreUs+" "+HOMENAME+"　│　"
-    +M.inn+"局"+(M.top?"上":"下")+"　"+M.outs+"出局　壘上["
-    +(M.bases[0]?"一":"　")+(M.bases[1]?"二":"　")+(M.bases[2]?"三":"　")+"]</span>","sys");
-}
-function basesStr(){
-  const b=M.bases; const n=b.filter(Boolean).length;
-  if(n===0)return"壘上無人";
-  if(b[0]&&b[1]&&b[2])return"滿壘";
-  const p=[]; if(b[0])p.push("一壘"); if(b[1])p.push("二壘"); if(b[2])p.push("三壘");
-  return p.join("、")+"有人";
-}
+function handTxt(h){ return h==="L"?"左":"右"; }
 
 function genFoeProfile(str){
   const r=rnd();
-  let type, inP, outP;
-  if(r<0.28){ type="內角派"; inP=0.50; outP=0.24; }
-  else if(r<0.56){ type="外角派"; inP=0.22; outP=0.52; }
-  else if(r<0.8){ type="均衡型"; inP=0.35; outP=0.35; }
-  else { type="速差派"; inP=0.30; outP=0.38; }
-  const breakP = type==="速差派"? 0.55 : Math.min(0.6, 0.30+str*0.02);
-  return {type:type, inP:inP, outP:outP, breakP:breakP};
+  let type;
+  if(r<0.28) type="內角派";
+  else if(r<0.56) type="外角派";
+  else if(r<0.8) type="均衡型";
+  else type="速差派";
+  const hand = chance(0.3)?"L":"R";
+  return {type:type, hand:hand, str:str};
 }
-function startMatch(cfg){
-  M=newMatch(cfg);
-  M.foeProfile=genFoeProfile(cfg.foeStr);
-  M.batProfiles=genBatLineup();
-  hr(); head("比賽　"+cfg.name, "對戰："+cfg.foe+"（先攻）　"+HOMENAME+"後攻");
-  story(S.pos==="P"?"你是先發投手。捕手蹲下來，比出第一個暗號。":"你排第4棒。打擊手套的魔鬼氈聲，是開戰的信號。");
-  next("比賽開始！", halfInning);
-}
-function halfInning(){
-  statusBar();
-  if(M.done) return;
-  const maxInn=M.cfg.innings;
-  if(M.inn>maxInn || (M.inn===maxInn && !M.top && M.scoreUs>M.scoreThem)){
-    finishMatch(); return;
-  }
-  if(M.top){
-    if(S.pos==="P" && M.pitcherHp>0) foePlayerPitch();
-    else simHalf_them();
-  }else{
-    ourAtBat();
-  }
-}
-function advanceHalf(){
-  M.outs=0; M.bases=[null,null,null];
-  if(M.top){ M.top=false; }
-  else{
-    M.top=true; M.inn++;
-    if(M.inn>M.cfg.innings){ finishMatch(); return; }
-  }
-  halfInning();
+function myBatSide(foeHand){
+  if(S.hand!=="S") return S.hand;
+  return foeHand==="L"?"R":"L";
 }
 
-/* ================= 我方進攻 ================= */
-function foeTireLimit(){ return 45 + M.cfg.foeStr*5; }
-function checkFoeSwap(){
-  if(!M.foeSwapped && M.foePitchCount > foeTireLimit()+25){
-    M.foeSwapped=true;
-    M.foePitchCount=0;
-    M.cfg.foeStr=Math.max(3, M.cfg.foeStr-1);
-    M.foeProfile=genFoeProfile(M.cfg.foeStr);
-    hr();
-    gameLine("🔁 對方教練走上投手丘——先發被你們磨垮，換投！中繼投手是【"+M.foeProfile.type+"】。","B");
-  }
+/* ---- 比賽入口（story/career 介面不變） ---- */
+function startMatch(cfg){
+  M={cfg:cfg, foeProfile:genFoeProfile(cfg.foeStr), scoreUs:0, scoreThem:0,
+     myGame:{ab:0,h:0,hr:0,rbi:0, so:0,er:0,outs:0}, done:false};
+  const fp=M.foeProfile;
+  hr(); head("比賽　"+cfg.name, "對戰："+cfg.foe+"　"+HOMENAME+"後攻");
+  const side=myBatSide(fp.hand);
+  const adv = side!==fp.hand;
+  story("對方先發：【"+handTxt(fp.hand)+"投・"+fp.type+"】。"
+    +(S.pos==="P" ? ("你掛帥先發（"+handTxt(S.throwHand)+"投）。")
+      : ("你以第4棒出賽"+(S.hand==="S"?("，站上"+handTxt(side)+"打席"):"")+"——對戰"+(adv?"反手優勢。":"同側，變化球會外逃。"))));
+  sys("狀態："+moodName(S.yaruki)+"　（戰況由能力・特性・左右對決加權擲骰自動進行）");
+  next("比賽開始！", simulateGame);
 }
-function ourAtBat(){
-  if(M.outs>=3){ advanceHalf(); return; }
-  checkFoeSwap();
-  const slot=M.order%9;
-  if(slot===M.myBatSlot){ playerAtBat(); }
-  else{ simTeammateAtBat(slot); }
-}
-function simTeammateAtBat(slot){
-  const bat=TEAM_LINEUP[slot];
-  const q = bat.q + (M.cfg.foeStr-5)*-0.01;
-  M.order++;
-  M.foePitchCount += ri(3,6);
-  const r=rnd();
-  let txt, hitType=0;
-  if(r<q*0.055){ txt=bat.n+" 掃出全壘打！"; hitType=4; }
-  else if(r<q*0.29){ txt=bat.n+" 安打上壘。"; hitType=1; }
-  else if(r<q*0.29+0.09){ txt=bat.n+" 選到四壞球。"; hitType=1; }
-  else if(r<q*0.29+0.11){ txt=bat.n+" 二壘安打！"; hitType=2; }
-  else{
-    if(M.bases[0] && M.outs<2 && chance(0.13)){
-      M.outs+=2; M.bases[0]=null;
-      gameLine("　"+bat.n+" 打成雙殺打……","B");
-      ourAtBat(); return;
+
+/* ---- 全場模擬 ---- */
+function simulateGame(){
+  const cfg=M.cfg;
+  let foeStr=cfg.foeStr;
+  let foePitches=0, swapped=false;
+  for(let inn=1; inn<=cfg.innings; inn++){
+    gameLine("── 第"+inn+"局 ──");
+    M.scoreThem += theirHalf(inn, foeStr);
+    M.scoreUs += ourHalf(inn, foeStr, (p)=>{foePitches+=p;});
+    const limit = 13*inn + foeStr*4;
+    if(!swapped && foePitches > limit + 20){
+      swapped=true; foeStr=Math.max(3,foeStr-1);
+      M.foeProfile=genFoeProfile(foeStr);
+      gameLine("🔁 對方先發被磨垮退場——中繼是【"+handTxt(M.foeProfile.hand)+"投・"+M.foeProfile.type+"】。","B");
     }
-    txt=bat.n+" "+pick(["遭到三振。","內野滾地出局。","飛球被接殺。","小飛球出局。"]);
-    M.outs++;
-    gameLine("　"+txt,"B");
-    ourAtBat(); return;
   }
-  advanceRunners(hitType, true);
-  gameLine("　"+txt,"B");
-  ourAtBat();
+  finishMatch();
 }
-function advanceRunners(nBase, isUs, batterToBase){
-  let runs=0; const b=M.bases;
-  if(nBase>=4){ runs = 1 + b.filter(Boolean).length; M.bases=[null,null,null]; }
-  else{
-    for(let i=2;i>=0;i--){
-      if(!b[i]) continue;
-      const to=i+nBase;
-      if(to>=3){ runs++; b[i]=null; }
-      else { b[to]=b[i]; b[i]=null; }
+
+/* ---- 對方進攻半局 ---- */
+function theirHalf(inn, foeStr){
+  let runs=0;
+  if(S.pos==="P"){
+    const st=S.stam/255;
+    const tired = inn > Math.max(2, Math.round(2+st*7));
+    const bk=Object.values(S.breaks).reduce((a,b)=>a+b,0);
+    const sink=(S.breaks["伸卡球"]||0), fork=(S.breaks["指叉球"]||0);
+    const stuff=(S.velo-115)/50*0.5 + bk*0.05 + (moodMod()-1)*0.3 - (tired?0.18:0);
+    const ctrlV=S.ctrl/255;
+    let outs=0, on1=false, lines=[], batterIdx=0;
+    while(outs<3 && runs<6){
+      batterIdx++;
+      const bHandR=rnd();
+      const bHand = bHandR<0.55?"R": bHandR<0.9?"L":(S.throwHand==="L"?"R":"L");
+      const same = bHand===S.throwHand;
+      let pK = 0.24 + stuff*0.3 + (same?0.05:0) - foeStr*0.012;
+      if(S.throwHand==="L"&&bHand==="L"){ pK+=0.03; if(hasT("左打者殺手"))pK+=0.06; }
+      if(S.throwHand==="L"&&bHand==="R"&&hasT("火線交叉")) pK+=0.05;
+      if(hasT("速差魔術師")) pK+=0.03;
+      if(hasT("配球師")) pK+=0.03;
+      const pBB = Math.max(0.03, 0.12 - ctrlV*0.10 + (tired?0.05:0));
+      const pHitA = Math.max(0.08, 0.24 - stuff*0.18 + foeStr*0.014 - ctrlV*0.05 + (tired?0.06:0));
+      const r=rnd();
+      if(r<pK){
+        outs++; M.myGame.so++; S.stats.so++; M.myGame.outs++; S.stats.outsRec++;
+        const flavor = pick(["外角低變化球引誘揮空","同位置速差騙過","內角速球壓制","對角配球戲耍"]);
+        if(flavor.includes("速差")||flavor.includes("對角")){ S.flags.comboOK=(S.flags.comboOK||0)+1; }
+        if(flavor.includes("內角")){ S.flags.zoneIn=(S.flags.zoneIn||0)+1; if(S.throwHand==="L"&&bHand==="R")S.flags.tCross=(S.flags.tCross||0)+1; }
+        if(flavor.includes("外角")){ S.flags.zoneOut=(S.flags.zoneOut||0)+1; }
+        if(S.throwHand==="L"&&bHand==="L") S.flags.tKL=(S.flags.tKL||0)+1;
+        if(chance(0.4)) lines.push("K！"+handTxt(bHand)+"打者遭"+flavor+"。");
+      }else if(r<pK+pBB){
+        if(on1&&chance(0.25)){ runs++; M.myGame.er++; S.stats.er++; lines.push("保送擠壘失分…"); }
+        else lines.push("投出四壞。");
+        on1=true;
+      }else if(r<pK+pBB+pHitA){
+        const hardP = 0.16 + foeStr*0.015 - stuff*0.12 + (same?0:0.04);
+        if(chance(hardP*0.35)){
+          const rr=1+(on1?1:0); runs+=rr; on1=false;
+          M.myGame.er+=rr; S.stats.er+=rr;
+          lines.push("💦 失投被咬中——飛出牆外，失"+rr+"分……");
+        }else{
+          if(on1 && chance(0.3)){ runs++; M.myGame.er++; S.stats.er++; lines.push("連續安打失分…"); }
+          else lines.push("被敲安打。");
+          on1=true;
+        }
+      }else{
+        const gb = 0.35 + sink*0.05 + fork*0.03;
+        if(on1 && outs<2 && chance(gb*(0.5+(hasT("雙殺製造機")?0.15:0)))){
+          outs+=2; on1=false; M.myGame.outs+=2; S.stats.outsRec+=2;
+          S.flags.tDP=(S.flags.tDP||0)+1;
+          lines.push("⚡ 低角度做球奏效——4-6-3雙殺！");
+        }else{
+          outs++; M.myGame.outs++; S.stats.outsRec++;
+        }
+      }
+      if(batterIdx>12) break;
     }
-    b[nBase-1]=batterToBase||"R";
+    gameLine("　(投) "+(lines.length?lines.join(" "):"三上三下！"));
+  }else{
+    const pQ = 0.5 - foeStr*0.03;
+    runs = chance(0.35-pQ*0.3)? ri(1,2) : chance(0.15)? ri(1,3) : 0;
+    if(chance(0.14)){
+      if(chance(0.3+S.fld*0.04)){
+        gameLine("　(守) ✨ 強襲球被你飛撲沒收！美技上了轉播精華。","B");
+        S.evCoach=Math.min(99,S.evCoach+2);
+        runs=Math.max(0,runs-1);
+      }else if(chance(Math.max(0.05,0.25-S.fld*0.012))){
+        gameLine("　(守) 💦 你的失誤送給對方壘包……","B");
+        S.evCoach=Math.max(0,S.evCoach-2);
+        if(chance(0.4)) runs++;
+      }
+    }
+    if(runs>0) gameLine("　(守) 對方攻下"+runs+"分。");
+    else gameLine("　(守) 平安守住。");
   }
-  if(isUs) M.scoreUs+=runs; else M.scoreThem+=runs;
-  if(runs>0) gameLine("　"+(isUs?"我方":"對方")+"得到 "+runs+" 分！", isUs?"B":undefined);
   return runs;
 }
 
-/* ---- 你的打席：揮法＋方向 ---- */
-function playerAtBat(){
-  M.order++;
-  hr();
-  gameLine("── 你的打席（第"+(M.myBatSlot+1)+"棒）──","B");
-  scoreBoard();
-  const p=M.foeProfile;
-  sys("偵察報告：對方投手是【"+p.type+"】"+(hasT("鷹眼")?("　內角"+Math.round(p.inP*100)+"%／外角"+Math.round(p.outP*100)+"%／變化球率"+Math.round(p.breakP*100)+"%"):"（配球傾向：概略）"));
-  M.foeLast=null;
-  const ctx={balls:0,strikes:0};
-  batPitch(ctx);
+/* ---- 我方進攻半局（你的打席詳細呈現） ---- */
+function ourHalf(inn, foeStr, addPitches){
+  let runs=0, pitches=ri(12,20);
+  const teamAtk = 0.32 - foeStr*0.02 + (moodMod()-1)*0.1;
+  if(chance(Math.max(0.08,teamAtk))) runs+=ri(1,2);
+  if(S.pos!=="P" && chance(0.55)){
+    runs += myPlateAppearance(inn, foeStr, (p)=>{pitches+=p;});
+  }else if(S.pos==="P" && chance(0.2)){
+    gameLine("　(打) 你的打席：投手好好打了顆滾地球出局。");
+  }
+  addPitches(pitches);
+  if(runs>0) gameLine("　我方本局得"+runs+"分！","B");
+  return runs;
 }
-/* 敵投手AI配球（也懂同位置速差與對角） */
-function foePitchPlan(ctx){
-  const p=M.foeProfile, last=M.foeLast;
-  let inP=p.inP, outP=p.outP, breakP=p.breakP;
-  // 球數修正
-  if(ctx.strikes===2){ breakP=Math.min(0.8,breakP+0.15); outP+=0.08; }   // 決勝球偏外角變化
-  if(ctx.balls===3){ inP*=0.55; outP*=0.55; breakP*=0.7; }               // 滿壞球搶好球
-  // 前球修正（內外調動傾向）
-  if(last){
-    if(zoneSide(last.zone)==="in"){ outP+=0.15; inP=Math.max(0.05,inP-0.06); }
-    else if(zoneSide(last.zone)==="out"){ inP+=0.13; outP=Math.max(0.05,outP-0.05); }
+function myPlateAppearance(inn, foeStr, addP){
+  const fp=M.foeProfile;
+  const side=myBatSide(fp.hand);
+  const adv = side!==fp.hand;
+  const mm=moodMod();
+  M.myGame.ab++; S.stats.ab++;
+  let pHit = 0.16 + S.meet*0.016 + S.power*0.0004 + (adv?0.045:-0.045) + (mm-1)*0.15;
+  if(fp.hand==="L"&&hasT("左投剋星")) pHit+=0.05;
+  if(hasT("機會○")&&chance(0.5)) pHit+=0.03;
+  if(hasT("內角剋星")||hasT("外角剋星")) pHit+=0.02;
+  let pBB = 0.07 + (hasT("選球眼")?0.05:0) + (hasT("纏鬥打擊")?0.04:0) + (hasT("鷹眼")?0.03:0);
+  let pK  = Math.max(0.06, 0.24 - S.meet*0.010 + foeStr*0.012 - (adv?0.02:0) - (hasT("纏鬥打擊")?0.04:0));
+  const nPitch = 3 + (hasT("纏鬥打擊")?ri(1,4):ri(0,2)) + (hasT("選球眼")?1:0);
+  addP(nPitch);
+  if(chance(Math.max(0.03,(0.09-foeStr*0.005))*(nPitch/4))){ pHit+=0.15; } // 磨出失投甜球
+  const r=rnd();
+  if(r<pK){
+    M.myGame.so++;
+    gameLine("　(打) 你的打席：遭到三振……"+(adv?"":"（同側投手的變化球太刁）"),"B");
+    return 0;
   }
-  M.read={inP:inP, outP:outP, breakP:breakP};                            // 打者的當球讀取
-  let zone, isBreak;
-  if(last && chance(p.type==="速差派"?0.45:0.28)){
-    zone=last.zone; isBreak=!last.isBreak;                               // 同位置速差
-  }else{
-    const r=rnd(), tot=inP+outP;
-    const side = r<inP? "in" : r<tot? "out" : "mid";
-    zone = side==="mid"? "紅中" : side==="in"? (chance(0.5)?"內高":"內低") : (chance(ctx.strikes===2?0.3:0.5)?"外高":"外低");
-    isBreak = chance(breakP);
+  if(r<pK+pBB){
+    S.flags.tRead=(S.flags.tRead||0)+1;
+    gameLine("　(打) 你的打席：沉住氣選到四壞保送。","B");
+    return chance(0.2)?1:0;
   }
-  const isStrike = chance(0.62 - (M.cfg.foeStr*0.005) + (ctx.balls===3?0.15:0) - (ctx.strikes===2?0.06:0) - (M.foePitchCount>foeTireLimit()?0.07:0));
-  // 對方失投判定：想投的點沒投到，甜球飄進紅中（無法從讀取預測）
-  const tl=foeTireLimit();
-  const fatigueMul = M.foePitchCount>tl+15? 2.4 : M.foePitchCount>tl? 1.7 : 1;
-  const missP = Math.max(0.03, (0.10 - M.cfg.foeStr*0.006) * fatigueMul);
-  if(chance(missP)){
-    return {zone:"紅中", isBreak:isBreak, isStrike:true, miss:true};
+  if(r<pK+pBB+Math.max(0.1,pHit)){
+    M.myGame.h++; S.stats.h++;
+    if(fp.hand==="L") S.flags.tVsL=(S.flags.tVsL||0)+1;
+    const pull = hasT("拉打王")?0.5 : hasT("推打達人")?0.2 : 0.35;
+    const dir = chance(pull)?"pull":chance(0.5)?"push":"mid";
+    if(dir==="pull")S.flags.tPull=(S.flags.tPull||0)+1;
+    if(dir==="push")S.flags.tPush=(S.flags.tPush||0)+1;
+    if(chance(0.5)){ const zk=chance(0.5)?"tIn":"tOut"; S.flags[zk]=(S.flags[zk]||0)+1; }
+    const pHR = Math.min(0.35, S.power*0.0016 + (dir==="pull"?0.04:0) + (adv?0.02:0) + S.traj*0.01);
+    const dirW = dir==="pull"?"強拉左半邊":dir==="push"?"順推右外野":"咬中直擊中堅";
+    if(chance(pHR)){
+      M.myGame.hr++; S.stats.hr++;
+      const rbi=1+(chance(0.35)?1:0);
+      M.myGame.rbi+=rbi; S.stats.rbi+=rbi;
+      gameLine("　(打) 🎆 你的打席："+dirW+"——全壘打！！（"+rbi+"分砲）","B");
+      S.evCoach=Math.min(99,S.evCoach+4); S.fame=Math.min(999,S.fame+3);
+      return rbi;
+    }
+    const dbl=chance(0.22+S.run*0.012);
+    const rbi=chance(0.35)?1:0;
+    M.myGame.rbi+=rbi; S.stats.rbi+=rbi;
+    gameLine("　(打) 🟢 你的打席："+dirW+"，"+(dbl?"二壘安打！":"安打上壘！")+(rbi?"帶有打點！":""),"B");
+    S.evCoach=Math.min(99,S.evCoach+1);
+    return rbi;
   }
-  return {zone:zone,isBreak:isBreak,isStrike:isStrike};
-}
-function readHint(){
-  const r=M.read; if(!r) return "";
-  if(hasT("鷹眼")){
-    return "　讀取：內"+Math.round(r.inP*100)+"%／外"+Math.round(r.outP*100)+"%／變化"+Math.round(r.breakP*100)+"%";
+  if(chance(0.12) && inn>1){
+    const dpC = Math.max(0.05, 0.3 - S.run*0.015 - (side==="L"?0.06:0) - (hasT("內野安打○")?0.08:0));
+    if(chance(dpC)){ gameLine("　(打) 你的打席：滾地打成雙殺……","B"); return 0; }
+    if(hasT("內野安打○")&&chance(0.25)){ M.myGame.h++; S.stats.h++; gameLine("　(打) 你的打席：靠腳程搶下內野安打！"+(side==="L"?"（左打離一壘近！）":""),"B"); return 0; }
   }
-  const diff=r.inP-r.outP;
-  const rough = diff>0.12?"感覺會攻內角…" : diff<-0.12?"感覺會攻外角…" : "看不出傾向。";
-  return "　讀取："+rough;
-}
-function batPitch(ctx){
-  const foeP = 4 + M.cfg.foeStr;
-  const plan = foePitchPlan(ctx);
-  choices([
-    {label:"強振", fn:()=>dirPick("power")},
-    {label:"確實安打", fn:()=>dirPick("meet")},
-    {label:"觸擊短打", fn:()=>doSwing("bunt","mid")},
-    {label:"不揮棒(選球)", fn:()=>doSwing("take","mid")},
-  ], "球數 "+ctx.balls+"壞 "+ctx.strikes+"好　"+basesStr()
-     +(M.foeLast?("　前球："+M.foeLast.zone+(M.foeLast.isBreak?"變化球":"直球")):"　（初球）")+readHint()
-     +"　對方用球數"+M.foePitchCount+(M.foePitchCount>foeTireLimit()+15?"（快垮了！）":M.foePitchCount>foeTireLimit()?"（明顯疲勞）":""));
-  function dirPick(mode){
-    choices([
-      {label:"拉打（賭內角）"+(hasT("拉打王")?"★":""), fn:()=>doSwing(mode,"pull")},
-      {label:"看球反應（中間）", fn:()=>doSwing(mode,"mid")},
-      {label:"推打（賭外角）"+(hasT("推打達人")?"★":""), fn:()=>doSwing(mode,"push")},
-    ],"打擊方向？押對投球位置有大加成，押錯會吃虧。"+readHint());
-  }
-  function doSwing(mode, dir){
-    const meetV=S.meet, mm=moodMod();
-    M.foeLast={zone:plan.zone,isBreak:plan.isBreak};
-    M.foePitchCount++;
-    if(mode==="take"){
-      if(plan.miss){
-        ctx.strikes++;
-        gameLine("　對方失投！甜到不能再甜的"+(plan.isBreak?"半吊子變化球":"直球")+"直直飄過紅中——你眼睜睜看它進壘。好球！（可惜了！！）","B");
-        return checkCount();
-      }
-      if(plan.isStrike){
-        ctx.strikes++;
-        gameLine("　"+plan.zone+(plan.isBreak?"變化球":"直球")+"進壘——好球！","B");
-      }else{
-        ctx.balls++;
-        S.flags.tRead=(S.flags.tRead||0)+1;
-        gameLine("　球甩到"+plan.zone+"外側，壞球。","B");
-      }
-      return checkCount();
-    }
-    /* 方向 × 位置 判定 */
-    const side=zoneSide(plan.zone);
-    if((dir==="pull"&&side==="in")||(dir==="push"&&side==="out")){ S.flags.tRead=(S.flags.tRead||0)+1; }
-    let dirMod=0, dirTag="";
-    if(dir==="pull"){
-      if(side==="in"){ dirMod=0.14+(hasT("拉打王")?0.08:0); dirTag="押對內角！"; }
-      else if(side==="out"){ dirMod=-0.15+(hasT("拉打王")?0.04:0); dirTag="外角球硬拉…"; }
-    }else if(dir==="push"){
-      if(side==="out"){ dirMod=0.14+(hasT("推打達人")?0.08:0); dirTag="順勢推向外角！"; }
-      else if(side==="in"){ dirMod=-0.15+(hasT("推打達人")?0.04:0); dirTag="內角球硬推…"; }
-    }
-    if(side==="in"&&hasT("內角剋星")) dirMod+=0.06;
-    if(side==="out"&&hasT("外角剋星")) dirMod+=0.06;
-    if(ctx.balls===0&&ctx.strikes===0&&hasT("首球必打")) dirMod+=0.06;
-    if(ctx.strikes===2&&hasT("兩好球膽識")) dirMod+=0.08;
-    if(!plan.isStrike && chance(0.5 - meetV*0.015 - (dir!=="mid"?0.08:0))){
-      ctx.strikes++;
-      gameLine("　壞球！你忍不住出棒——揮空！","B");
-      return checkCount();
-    }
-    if(!plan.isStrike && mode!=="bunt"){
-      ctx.balls++;
-      gameLine("　看穿了壞球，收棒。","B");
-      return checkCount();
-    }
-    let contact;
-    if(mode==="bunt") contact=0.9;
-    else contact = (0.30 + meetV*0.042 + (mode==="meet"?0.13:0) + dirMod + (plan.miss?0.14:0) - foeP*0.022 - (plan.isBreak?0.07:0)) * mm;
-    if(!chance(Math.max(0.05,contact))){
-      ctx.strikes++;
-      gameLine("　"+(plan.isBreak?plan.zone+"的變化球——":plan.zone+"速球——")+"揮棒落空！"+(dirTag&&dirMod<0?"（"+dirTag+"）":""),"B");
-      return checkCount();
-    }
-    if(chance(0.28 - (mode==="meet"?0.08:0) - Math.max(0,dirMod)*0.3)){
-      if(ctx.strikes<2) ctx.strikes++;
-      gameLine("　打成界外。","B");
-      return checkCount();
-    }
-    resolveContact(mode, dir, plan, dirMod, dirTag);
-  }
-  function checkCount(){
-    if(ctx.strikes>=3){
-      M.outs++; M.myGame.ab++; S.stats.ab++;
-      gameLine("　❌ 三振出局……","B");
-      return next(null, ourAtBat);
-    }
-    if(ctx.balls>=4){
-      gameLine("　🚶 四壞球保送！","B");
-      const b=M.bases;
-      if(b[0]&&b[1]&&b[2]){ M.scoreUs++; }
-      else if(b[0]&&b[1]){ b[2]=b[1]; b[1]=b[0]; }
-      else if(b[0]){ b[1]=b[0]; }
-      b[0]="你";
-      return next(null, ourAtBat);
-    }
-    batPitch(ctx);
-  }
-  function resolveContact(mode, dir, plan, dirMod, dirTag){
-    M.myGame.ab++; S.stats.ab++;
-    const mm=moodMod();
-    const powV = S.power*mm*(1+Math.max(0,dirMod)), foeD = M.cfg.foeStr;
-    if(mode==="bunt"){
-      if(M.bases[0]||M.bases[1]){
-        gameLine("　犧牲觸擊成功，跑者推進！","B");
-        M.outs++;
-        const b=M.bases;
-        if(b[1]&&!b[2]){b[2]=b[1];b[1]=null;}
-        if(b[0]&&!b[1]){b[1]=b[0];b[0]=null;}
-      }else if(chance(0.2+S.run*0.03)){
-        gameLine("　突襲短打——安全上壘！","B");
-        M.myGame.h++; S.stats.h++; advanceRunners(1,true,"你");
-      }else{
-        M.outs++; gameLine("　短打被投手撲到，一壘出局。","B");
-      }
-      return next(null, ourAtBat);
-    }
-    const hardHit = (mode==="power"? powV/150 : powV/230) - foeD*0.03 + Math.max(0,dirMod)*0.5 + (plan.miss?0.16:0);
-    const r=rnd();
-    const dirWord = dir==="pull"?"往左半邊強拉":"順推右半邊"; // 右打視角
-    if(r < hardHit*0.30 && (mode==="power"||powV>120)){
-      if(chance( Math.min(0.8, powV/205 + (plan.miss?0.1:0)) )){
-        M.myGame.hr++; S.stats.hr++; M.myGame.h++; S.stats.h++;
-        const rr=advanceRunners(4,true);
-        M.myGame.rbi+=rr; S.stats.rbi+=rr;
-        gameLine("　🎆 "+(plan.miss?"一球不放過——抓到失投！":(dirTag||""))+"打中球心！"+(dir!=="mid"?dirWord:"白球直竄中外野")+"——全壘打！！","B");
-        tallyHit(dir, plan);
-        return next(null, ourAtBat);
-      }
-      gameLine("　差一點就出牆！被外野手在牆前接殺……","B");
-      M.outs++;
-      return next(null, ourAtBat);
-    }
-    if(r < hardHit*0.30 + 0.28 + S.meet*0.01 + Math.max(0,dirMod)*0.3){
-      const isDouble = chance(0.22 + (mode==="power"?0.1:0) + S.run*0.012);
-      M.myGame.h++; S.stats.h++;
-      const rr=advanceRunners(isDouble?2:1,true,"你");
-      M.myGame.rbi+=rr; S.stats.rbi+=rr;
-      gameLine("　🟢 "+(plan.miss?"抓到失投甜球！":(dirTag?dirTag+" ":""))+(isDouble?"強勁的二壘安打！":"漂亮的安打！")+(rr>0?"跑者回來得分！":""),"B");
-      tallyHit(dir, plan);
-      return next(null, ourAtBat);
-    }
-    const ot = pick(["ground","ground","fly","fly","liner"]);
-    if(ot==="ground" && M.bases[0] && M.outs<2){
-      const dpC = Math.max(0.1, 0.45 - S.run*0.022 - (hasT("內野安打○")?0.1:0));
-      if(chance(dpC)){
-        M.outs+=2; M.bases[0]=null;
-        gameLine("　💔 滾地球——6-4-3雙殺！一壘跑者和你雙雙出局……","B");
-        return next(null, ourAtBat);
-      }
-      M.outs++;
-      gameLine("　滾地球形成野手選擇：一壘跑者在二壘被封殺，你靠腳程站上一壘。","B");
-      M.bases[0]="你";
-      return next(null, ourAtBat);
-    }
-    if(ot==="fly" && M.bases[2] && M.outs<2){
-      M.outs++; M.bases[2]=null; M.scoreUs++; M.myGame.rbi++; S.stats.rbi++;
-      gameLine("　🟡 夠深的外野高飛——犧牲打！三壘跑者踩壘回來得分！","B");
-      return next(null, ourAtBat);
-    }
-    M.outs++;
-    gameLine("　"+(ot==="ground"?"滾地球，游擊手處理。":ot==="fly"?"高飛球被外野接殺。":"強勁平飛球正面被接殺！"),"B");
-    return next(null, ourAtBat);
-  }
-  function tallyHit(dir, plan){
-    if(dir==="pull")M.tally.pullHit++;
-    if(dir==="push")M.tally.pushHit++;
-    if(zoneSide(plan.zone)==="in")M.tally.inHit++;
-    if(zoneSide(plan.zone)==="out")M.tally.outHit++;
-  }
+  gameLine("　(打) 你的打席："+pick(["強勁平飛正面被接殺。","外野深遠飛球被沒收。","滾地球出局。"]),"B");
+  return chance(0.08)?1:0;
 }
 
-/* ================= 你是投手：配球系統 ================= */
-const BAT_TYPES=[
-  {type:"拉打型", strong:"in", weak:"out", chase:0.06, pow:0.06, note:"內角危險——愛硬拉，外角是弱點"},
-  {type:"推打型", strong:"out", weak:"in", chase:0.02, pow:0, note:"外角推打巧——內角塞得進去"},
-  {type:"廣角型", strong:null, weak:null, chase:0, pow:0.03, note:"沒有明顯死角，靠球威和配球分勝負"},
-  {type:"力量型", strong:"mid", weak:null, chase:0.10, pow:0.12, note:"失投必被轟——但揮大棒、會追壞球"},
-  {type:"選球型", strong:null, weak:null, chase:-0.12, pow:-0.04, note:"壞球引誘不太上當，要用好球帶內決勝"},
-  {type:"自由揮擊型", strong:null, weak:null, chase:0.16, pow:0.02, note:"什麼都揮——引誘壞球的大好目標"},
-];
-function genBatLineup(){
-  // 六種類型全到齊＋三個隨機補位，開賽洗牌後固定九棒
-  const idx=[0,1,2,3,4,5, ri(0,5), ri(0,5), ri(0,5)];
-  for(let i=idx.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const t=idx[i]; idx[i]=idx[j]; idx[j]=t; }
-  return idx.map(i=>BAT_TYPES[i]);
-}
-function foePlayerPitch(){
-  if(M.outs>=3){ advanceHalf(); return; }
-  M.foeOrder++;
-  const batQ = 3 + M.cfg.foeStr*0.7 + (M.foeOrder%9<4? 1.5:0);
-  hr();
-  gameLine("── 對方第"+((M.foeOrder-1)%9+1)+"棒站上打擊區 ──");
-  scoreBoard();
-  const slot=(M.foeOrder-1)%9;
-  M.batProfile=M.batProfiles[slot];
-  const bp=M.batProfile;
-  sys("捕手情報：第"+(slot+1)+"棒【"+bp.type+"】——"+bp.note
-    +(hasT("配球師")?("　（精讀：追打率"+(bp.chase>=0?"+":"")+Math.round(bp.chase*100)+"%／長打威脅"+(bp.pow>=0?"+":"")+Math.round(bp.pow*100)+"%）"):""));
-  M.lastPitch=null;
-  const ctx={balls:0,strikes:0,batQ:batQ};
-  pitchChoice(ctx);
-}
-function comboEval(kind, zone, isWaste){
-  /* 依前一球評估本球的配球加成 */
-  const last=M.lastPitch;
-  if(!last) return {whiff:0, look:0, sit:0, name:null};
-  const isFast = kind==="直球";
-  let whiff=0, look=0, sit=0, name=null;
-  if(zone===last.zone && isFast!==last.isFast){
-    whiff+=0.16; name="同位置速差";
-    if(hasT("速差魔術師")) whiff+=0.10;
-  }else if((zoneHigh(zone)!==zoneHigh(last.zone)) && (zoneSide(zone)!==zoneSide(last.zone)) && zoneSide(zone)!=="mid" && zoneSide(last.zone)!=="mid"){
-    whiff+=0.10; look+=0.10; name="對角攻擊";
-  }else if(zoneSide(zone)!==zoneSide(last.zone) && zoneSide(zone)!=="mid" && zoneSide(last.zone)!=="mid"){
-    look+=0.08; name="內外調動";
-  }
-  if(zone===last.zone && kind===last.kind){
-    sit+=0.16; name="同球種同位置（危險！）";
-  }
-  if(last.zone && zoneSide(last.zone)==="in" && zoneHigh(last.zone)==="hi" && zoneSide(zone)==="out" && zoneHigh(zone)==="lo" && isWaste){
-    whiff+=0.08; name="內高壓迫→外低誘打";
-  }
-  if(hasT("配球師")){ whiff*=1.4; look*=1.4; }
-  return {whiff:whiff, look:look, sit:sit, name:name};
-}
-function pitchChoice(ctx){
-  const tired = M.pitcherHp<30;
-  if(tired && !ctx.warned){ ctx.warned=1; sys("⚠ 手臂很沉重……球威和控球都在下降。"); }
-  const kinds=["直球", ...Object.keys(S.breaks)];
-  choices(kinds.map(k=>({label:k+(k!=="直球"?" Lv"+S.breaks[k]:""), fn:()=>chooseLoc(k)})),
-    "球數 "+ctx.balls+"壞 "+ctx.strikes+"好　"+M.outs+"出局　"+basesStr()+"　體力"+Math.max(0,Math.round(M.pitcherHp))
-    +(M.lastPitch?("　前球："+M.lastPitch.zone+M.lastPitch.kind):"　（打席初球）"));
-  function chooseLoc(kind){
-    const bp=M.batProfile||{};
-    const zoneBtns = ZONES.map(z=>{
-      const c=comboEval(kind,z,false);
-      const side=zoneSide(z);
-      let mark = c.name&&c.sit? "⚠" : c.name? "◎" : "";
-      if(bp.strong && side===bp.strong) mark+="🔥";           // 打者強區
-      else if(bp.strong==="mid" && z==="紅中") mark+="🔥";
-      if(bp.weak && side===bp.weak) mark+="○";                // 打者弱點
-      return {label:z+mark+((side==="in"&&hasT("內角職人"))||(side==="out"&&hasT("外角職人"))?"★":""), fn:()=>choosePow(kind,z,false)};
-    });
-    zoneBtns.push({label:"壞球引誘"+(M.lastPitch&&zoneSide(M.lastPitch.zone)==="in"&&zoneHigh(M.lastPitch.zone)==="hi"?"◎(接內高)":""), fn:()=>{
-      const z = M.lastPitch? ({in:"外低",out:"內低",mid:"外低"}[zoneSide(M.lastPitch.zone)]) : pick(["外低","內低"]);
-      choosePow(kind,z,true);
-    }});
-    choices(zoneBtns,"位置？（◎連攜加成　⚠會被鎖定　🔥打者強區　○打者弱點　★職人區）"
-      +(M.bases[0]&&M.outs<2?"　💡一壘有人：低角度＋伸卡/指叉可做雙殺球":""));
-  }
-  function choosePow(kind,zone,isWaste){
-    choices([
-      {label:"全力投球", fn:()=>throwPitch(kind,zone,isWaste,1.25,8)},
-      {label:"普通", fn:()=>throwPitch(kind,zone,isWaste,1.0,5)},
-      {label:"省力", fn:()=>throwPitch(kind,zone,isWaste,0.8,3)},
-    ],"用多少力？（全力消耗大；省力容易被抓）");
-  }
-  function throwPitch(kind,zone,isWaste,powMul,cost){
-    M.pitcherHp-=cost*(1 - S.stam/500);
-    const fat = M.pitcherHp<30? 0.75 : M.pitcherHp<55? 0.9 : 1;
-    const combo=comboEval(kind,zone,isWaste);
-    const side=zoneSide(zone);
-    let zoneCmd=0;
-    if(side==="in"){ M.tally.inPitch++; S.flags.zoneIn=(S.flags.zoneIn||0)+1; if(hasT("內角職人"))zoneCmd=0.08; }
-    if(side==="out"){ M.tally.outPitch++; S.flags.zoneOut=(S.flags.zoneOut||0)+1; if(hasT("外角職人"))zoneCmd=0.08; }
-    const ctrlV=(S.ctrl/255)*fat + zoneCmd;
-    const stuff = ((S.velo-120)/45*0.6 + (kind!=="直球"? (S.breaks[kind]||0)*0.09 : 0)) * powMul * fat * moodMod();
-    const cmdOk = chance(0.35+ctrlV*0.55);
-    let inZone = isWaste? (cmdOk?false:chance(0.35)) : (cmdOk?true:chance(zone==="紅中"?0.75:0.5));
-    const missCmd = !cmdOk && inZone && !isWaste && zone!=="紅中";   // 失投：想塞邊角卻掉進打擊甜蜜點
-    const batQ=ctx.batQ;
-    const bp=M.batProfile||{chase:0,pow:0};
-    const hitStrong = (bp.strong && side===bp.strong) || (bp.strong==="mid" && zone==="紅中");
-    const hitWeak = bp.weak && side===bp.weak;
-    // 打者揮棒意願：連攜引誘增加追打、鎖定增加選球與擊球
-    let swingP = inZone? (0.65+ctx.strikes*0.12) : (isWaste? 0.30+stuff*0.10+combo.whiff*0.5+bp.chase : 0.22+bp.chase*0.5);
-    swingP -= batQ*0.008;
-    swingP += combo.sit*0.3;
-    const swings = chance(Math.max(0.05,Math.min(0.95,swingP)));
-    const desc = kind+(isWaste?"甩出"+zone+"外側":"攻向"+zone)+(missCmd?"（失投！掉進甜蜜點）":"");
-    const comboTag = combo.name? "〔"+combo.name+"〕" : "";
-    M.lastPitch={kind:kind, zone:zone, isFast:kind==="直球"};
-    if(!swings){
-      if(inZone){ ctx.strikes++; gameLine("　"+desc+comboTag+"——看著進壘，好球！"+(combo.look?"（配球讓他不敢出棒）":"")); }
-      else{ ctx.balls++; gameLine("　"+desc+"——打者沒上當，壞球。"); }
-      return afterPitch();
-    }
-    const contact = Math.max(0.06, Math.min(0.92,
-      0.62 + batQ*0.022 + combo.sit + (hitStrong?0.08:0) + (missCmd?0.08:0) - (hitWeak?0.07:0) - stuff*0.45 - combo.whiff - (inZone?0:0.22)));
-    if(!chance(contact)){
-      ctx.strikes++;
-      if((combo.name&&!combo.sit)||hitWeak){ M.tally.comboK++; S.flags.comboOK=(S.flags.comboOK||0)+1; }
-      gameLine("　"+desc+comboTag+"——揮棒落空！"+(hitWeak?"正中他的弱點！":combo.whiff>0.12?"配球完全騙到他！":""));
-      return afterPitch();
-    }
-    if(chance(0.32 - combo.sit*0.3)){
-      if(ctx.strikes<2)ctx.strikes++;
-      gameLine("　被碰成界外。");
-      return afterPitch();
-    }
-    const hardP = Math.max(0.05, 0.30 + batQ*0.02 + combo.sit*0.8 + bp.pow + (hitStrong?0.10:0) + (missCmd? 0.12+Math.max(0,bp.pow)*1.5 : 0) - (hitWeak?0.08:0) - stuff*0.35 - (inZone?0:0.1));
-    const r=rnd();
-    if(r<hardP*0.16){
-      const rr=advanceRunners(4,false);
-      gameLine("　💦 "+(combo.sit?"被完全鎖定——":"")+"球被掃向深遠——全壘打……失 "+rr+" 分。");
-      M.myGame.er+=rr; S.stats.er+=rr;
-      return endAB();
-    }
-    if(r<hardP*0.16+hardP*0.55){
-      const dbl=chance(0.25);
-      const rr=advanceRunners(dbl?2:1,false);
-      if(rr){ M.myGame.er+=rr; S.stats.er+=rr; }
-      gameLine("　被敲出"+(dbl?"二壘安打":"安打")+"。"+(rr?"失分…":""));
-      return endAB();
-    }
-    const sinkLv = kind==="伸卡球"? (S.breaks["伸卡球"]||0) : 0;
-    const forkLv = kind==="指叉球"? (S.breaks["指叉球"]||0) : 0;
-    const groundBias = (zoneHigh(zone)==="lo"?0.22:0) + (sinkLv? 0.14+sinkLv*0.04 : 0) + (forkLv? 0.08+forkLv*0.03 : 0);
-    const ot2 = chance(0.38+groundBias)? "ground" : chance(0.5)? "fly" : "liner";
-    if(ot2==="ground" && M.bases[0] && M.outs<2){
-      const dpC = Math.min(0.85, 0.42 + groundBias*0.5 + (hasT("雙殺製造機")?0.12:0));
-      if(chance(dpC)){
-        M.outs+=2; M.myGame.outs+=2; S.stats.outsRec+=2; M.bases[0]=null;
-        S.flags.tDP=(S.flags.tDP||0)+1;
-        gameLine("　⚡ 滾地球——4-6-3雙殺成立！一球換兩個出局！"+(groundBias>0?"（低角度做球奏效）":""));
-        gain("教練評價+2"); S.evCoach=Math.min(99,S.evCoach+2);
-        return endAB();
-      }
-      M.outs++; M.myGame.outs++; S.stats.outsRec++;
-      gameLine("　滾地球封殺二壘跑者，野手選擇——打者站上一壘。");
-      M.bases[0]="敵";
-      return endAB();
-    }
-    if(ot2==="fly" && M.bases[2] && M.outs<2){
-      M.outs++; M.myGame.outs++; S.stats.outsRec++; M.bases[2]=null; M.scoreThem++; M.myGame.er++; S.stats.er++;
-      gameLine("　外野高飛……夠深，三壘跑者回壘得分。犧牲飛球失1分。");
-      return endAB();
-    }
-    M.outs++; M.myGame.outs++; S.stats.outsRec++;
-    gameLine("　"+(ot2==="ground"?pick(["滾地球，二壘手輕鬆處理。","游擊手飛撲攔下，傳一壘出局！"]):ot2==="fly"?"高飛球被中外野接殺。":"平飛球正面！三壘手接住。"));
-    return endAB();
-  }
-  function afterPitch(){
-    if(ctx.strikes>=3){
-      M.outs++; M.myGame.so++; S.stats.so++; M.myGame.outs++; S.stats.outsRec++;
-      gameLine("　🔥 三振！打者搖著頭走回休息區。");
-      return next(null, contOrNext);
-    }
-    if(ctx.balls>=4){
-      gameLine("　四壞球保送……");
-      const b=M.bases;
-      if(b[0]&&b[1]&&b[2]){ M.scoreThem++; M.myGame.er++; S.stats.er++; }
-      else if(b[0]&&b[1]){ b[2]=b[1];b[1]=b[0]; }
-      else if(b[0]){ b[1]=b[0]; }
-      b[0]="敵";
-      return next(null, contOrNext);
-    }
-    pitchChoice(ctx);
-  }
-  function endAB(){ next(null, contOrNext); }
-  function contOrNext(){
-    if(M.outs>=3){ advanceHalf(); }
-    else if(M.pitcherHp<=0){
-      sys("你已經投不動了……教練走上投手丘，拍拍你的肩。之後交給牛棚。");
-      simRestThem();
-    }
-    else foePlayerPitch();
-  }
-}
-/* 野手時：對方半局快速模擬＋守備事件 */
-function simHalf_them(){
-  let txts=[];
-  while(M.outs<3){
-    M.foeOrder++;
-    const r=rnd(); const batQ=M.cfg.foeStr;
-    if(S.pos==="B" && M.outs<3 && chance(0.15)){ fieldingMoment(txts); return; }
-    if(r<0.20+batQ*0.012){ advanceRunners(chance(0.2)?2:1,false); txts.push("對方敲出安打。"); }
-    else if(r<0.24+batQ*0.012){ const b=M.bases; if(b[0]&&b[1]&&b[2])M.scoreThem++; else if(b[0]&&b[1]){b[2]=b[1];b[1]=b[0];} else if(b[0])b[1]=b[0]; b[0]="敵"; txts.push("四壞保送。"); }
-    else if(r<0.245+batQ*0.012 && chance(0.5)){ advanceRunners(4,false); txts.push("被打出全壘打……"); }
-    else if(M.bases[0] && M.outs<2 && chance(0.14)){ M.outs+=2; M.bases[0]=null; txts.push("雙殺守備成功！"); }
-    else { M.outs++; txts.push(pick(["三振！","滾地出局。","飛球接殺。"])); }
-  }
-  gameLine("　（守備半局）"+txts.join(" "));
-  next(null, advanceHalf);
-}
-function fieldingMoment(prevTxts){
-  if(prevTxts.length) gameLine("　（守備半局）"+prevTxts.join(" "));
-  hr();
-  gameLine("❗ 強襲球朝你飛過來——！","B");
-  scoreBoard();
-  choices([
-    {label:"飛撲美技", fn:()=>tryField(0.25+S.fld*0.045, 2)},
-    {label:"穩穩正面接", fn:()=>tryField(0.55+S.fld*0.028, 1)},
-    {label:"退後擋下(保守)", fn:()=>tryField(0.97, 0)},
-  ],"守備 "+rankOf(S.fld)+"　（美技成功評價大增，失敗會漏球）");
-  function tryField(p, risk){
-    if(chance(Math.min(0.98,p))){
-      if(risk===2){ M.outs++; gameLine("　✨ 整個人飛出去把球接住！全場歡聲雷動！","B"); gain("守備美技！教練評價+4"); S.evCoach=Math.min(99,S.evCoach+4); }
-      else if(risk===1){ M.outs++; gameLine("　確實接殺，傳一壘出局。","B"); S.evCoach=Math.min(99,S.evCoach+1); }
-      else { gameLine("　把球擋在身前沒讓它穿出去，但來不及傳殺——打者上壘。","B"); advanceRunners(1,false); }
-    }else{
-      gameLine("　💦 球從手套邊彈開——失誤！","B");
-      advanceRunners(1,false); loss("失誤……教練評價-3"); S.evCoach=Math.max(0,S.evCoach-3);
-    }
-    next(null, ()=>{ if(M.outs>=3) advanceHalf(); else simHalf_them(); });
-  }
-}
-function simRestThem(){
-  while(M.outs<3){
-    const r=rnd();
-    if(r<0.26){ advanceRunners(chance(0.2)?2:1,false); }
-    else M.outs++;
-  }
-  gameLine("　牛棚投手驚險守住。");
-  next(null, advanceHalf);
-}
-
-/* ---- 結束＋特性養成 ---- */
+/* ---- 終場 ---- */
 function finishMatch(){
   M.done=true;
   hr();
@@ -1254,35 +857,33 @@ function finishMatch(){
   statusBar();
   next(null, ()=> cb? cb(win,draw) : (S.phase==="hs"? endTurn() : careerLoop()));
 }
-/* 使用習慣 → 特性標籤 */
+
+/* ---- 特性：由比賽表現自動累積 ---- */
 function traitProgress(){
-  const t=M.tally;
-  const add=(cond,key,counter,need,name,desc)=>{
-    if(!cond) return;
-    S.flags[key]=(S.flags[key]||0)+counter;
-    if(S.flags[key]>=need && !S.abil.includes(name)){
-      ev("打法自成一派——");
-      addAbil(name); sys(desc);
+  const chk=(key,need,name,desc)=>{
+    if((S.flags[key]||0)>=need && !S.abil.includes(name)){
+      ev("打法自成一派——"); addAbil(name); sys(desc);
     }
   };
-  add(t.pullHit>0,"tPull",t.pullHit,6,"拉打王","拉打（賭內角）成功時的力量加成大幅上升");
-  add(t.pushHit>0,"tPush",t.pushHit,6,"推打達人","推打（賭外角）成功時的安打率大幅上升");
-  add(t.inHit>0,"tIn",t.inHit,8,"內角剋星","打擊內角球時額外加成");
-  add(t.outHit>0,"tOut",t.outHit,8,"外角剋星","打擊外角球時額外加成");
-  add(t.comboK>0,"tCombo",t.comboK,8,"速差魔術師","同位置速差的揮空誘發大幅強化");
-  if((S.flags.tRead||0)>=14 && !S.abil.includes("鷹眼")){
-    ev("你開始「看得見」投手的思路——");
-    addAbil("鷹眼"); sys("偵察與每球讀取顯示精確機率（含變化球率）");
-  }
+  chk("tPull",6,"拉打王","拉打方向的安打與長打率上升");
+  chk("tPush",6,"推打達人","推打方向的安打率上升");
+  chk("tIn",8,"內角剋星","對內角球的打擊上升");
+  chk("tOut",8,"外角剋星","對外角球的打擊上升");
+  chk("tVsL",6,"左投剋星","對左投手的打擊大幅強化");
+  chk("tRead",14,"鷹眼","選球判斷力強化，保送率上升");
   if(S.pos==="P"){
+    chk("comboOK",20,"配球師","配球連攜的三振率上升");
+    chk("tDP",5,"雙殺製造機","雙殺誘發率大幅上升");
     const tot=(S.flags.zoneIn||0)+(S.flags.zoneOut||0);
-    if(tot>=60){
+    if(tot>=40){
       const inR=(S.flags.zoneIn||0)/tot;
-      if(inR>=0.6 && !S.abil.includes("內角職人")){ ev("你的配球慣性被捕手歸納成武器——"); addAbil("內角職人"); sys("內角系投球的控球與威力上升"); }
-      if(inR<=0.4 && !S.abil.includes("外角職人")){ ev("你的配球慣性被捕手歸納成武器——"); addAbil("外角職人"); sys("外角系投球的控球與威力上升"); }
+      if(inR>=0.6&&!S.abil.includes("內角職人")){ ev("配球慣性成了武器——"); addAbil("內角職人"); sys("內角系投球威力上升"); }
+      if(inR<=0.4&&!S.abil.includes("外角職人")){ ev("配球慣性成了武器——"); addAbil("外角職人"); sys("外角系投球威力上升"); }
     }
-    if((S.flags.comboOK||0)>=20 && !S.abil.includes("配球師")){ ev("投捕之間已經不需要言語——"); addAbil("配球師"); sys("所有配球連攜效果×1.4"); }
-    if((S.flags.tDP||0)>=5 && !S.abil.includes("雙殺製造機")){ ev("壘上有人時的低角度做球，已是你的招牌——"); addAbil("雙殺製造機"); sys("雙殺誘發率大幅上升"); }
+    if(S.throwHand==="L"){
+      chk("tKL",10,"左打者殺手","對左打者的壓制大幅上升");
+      chk("tCross",8,"火線交叉","對右打者的內角速球威力大幅上升");
+    }
   }
 }
 /* ================= 出去晃晃（台灣小鎮）＋ 戀愛線 ================= */
@@ -1830,7 +1431,7 @@ function graduationPhase(){
 }
 /* ================= 職業生涯引擎 =================
    每場比賽＝一個決策（全力/一般/養生）＋重要度（★～★★★）；
-   ★★★決定性時刻進入逐球操作。大學/社會人路線亦在此。 */
+   關鍵戰役以自動戰報引擎呈現。大學/社會人路線亦在此。 */
 
 const CPBL_TEAMS=["台北雷虎","高雄海鯨","桃園飛牛","台中太陽","台南鯤鯓","新竹風獅"];
 const NPB_TEAMS=["東京巨星","大阪浪虎","福岡海鷹","北海道棕熊"];
@@ -1839,7 +1440,7 @@ const MLB_TEAMS=["洛杉磯星辰","紐約帝國","西雅圖水手座","德州�
 /* ---- 簽約/選秀 ---- */
 function draftCPBL(fromUni){
   hr(); head("中職選秀會", "CPBL Draft・台北");
-  const score = overall() + S.scout.cpbl*0.6 + S.fame*0.3 + (fromUni?8:0);
+  const score = overall() + S.scout.cpbl*0.6 + S.fame*0.3 + (fromUni?8:0) + ((S.pos==="P"&&S.throwHand==="L")?6:(S.hand!=="R"?3:0));
   let round, salary;
   if(score>=95){ round="第一輪（狀元呼聲）"; salary=600; }
   else if(score>=75){ round="第一輪"; salary=420; }
@@ -1855,7 +1456,7 @@ function draftCPBL(fromUni){
 function signNPB(fromUni){
   hr(); head("旅日記者會", "NPB・跨海挑戰");
   const team=pick(NPB_TEAMS);
-  const score = overall() + S.scout.npb*0.6 + (fromUni?8:0);
+  const score = overall() + S.scout.npb*0.6 + (fromUni?8:0) + ((S.pos==="P"&&S.throwHand==="L")?6:(S.hand!=="R"?3:0));
   const salary = score>=95? 1400 : score>=75? 900 : 500;
   extra(team+" 正式簽下台灣新星 "+S.name);
   story("羽田機場的鎂光燈、聽不懂的問題、翻譯遞來的名片……新的戰場，語言先於球速。");
@@ -1865,7 +1466,7 @@ function signNPB(fromUni){
 function signMLB(fromUni){
   hr(); head("旅美簽約", "MLB・小聯盟合約");
   const team=pick(MLB_TEAMS);
-  const score = overall() + S.scout.mlb*0.6 + (fromUni?8:0);
+  const score = overall() + S.scout.mlb*0.6 + (fromUni?8:0) + ((S.pos==="P"&&S.throwHand==="L")?6:(S.hand!=="R"?3:0));
   const bonus = score>=95? 3200 : score>=75? 1600 : 800;
   extra(team+" 以簽約金"+fmtMoney(bonus)+"簽下 "+S.name);
   story("十幾個小時的飛機、時差、漢堡當三餐──從1A的巴士長征開始，用成績說英文。");
@@ -2483,9 +2084,9 @@ function startScreen(){
   $log().innerHTML="";
   head("創刊號・你的野球人生", "從海線高中的長草外野，到世界的舞台");
   story("這是一款台灣背景的純文字棒球人生模擬遊戲。");
-  sys("・高中三年（每週制）：練習、讀書、戀愛、黑豹旗與木棒聯賽，比賽逐球操作。\n"
+  sys("・高中三年（每週制）：練習、讀書、戀愛、黑豹旗與木棒聯賽。\n・比賽全自動：由能力值×特性×左右對決×狀態加權擲骰，呈現報紙式戰報；特性從表現自動養成。\n"
      +"・畢業分歧：大學／中職選秀（CPBL）／旅日（NPB）／旅美（MLB）──由成績、球探註記與學測決定選項。\n"
-     +"・職業生涯：每場比賽選擇「全力／一般／養生」，重要度★～★★★；★★★決定性時刻進入逐球操作。\n"
+     +"・職業生涯：每場比賽選擇「全力／一般／養生」，重要度★～★★★。\n"
      +"・國際賽（12強、經典賽）、旅外跳點、婚姻、衰退曲線、引退回顧特刊。\n"
      +"・種子決定隨機性：同種子＋同選擇＝同樣的人生。隨時可匯出存檔碼。");
   const urlSeed = new URLSearchParams(location.search).get("seed");
@@ -2509,12 +2110,25 @@ function setupName(urlSeed){
   function go(pos){
     const nm=(document.getElementById("inpName").value.trim())||"林海";
     const sd=(document.getElementById("inpSeed").value.trim())||seed;
-    initGame(sd, nm, pos);
+    if(pos==="B"){
+      choices([
+        {label:"右打", fn:()=>initGame(sd,nm,pos,{hand:"R"}), noEcho:true},
+        {label:"左打（近一壘：內野安打+、雙殺-；常吃反手優勢）", fn:()=>initGame(sd,nm,pos,{hand:"L"}), noEcho:true},
+        {label:"左右開弓（永遠反手優勢；初始接觸-1、接觸升級成本+15%）", fn:()=>initGame(sd,nm,pos,{hand:"S"}), noEcho:true},
+      ],"選擇打席：");
+    }else{
+      choices([
+        {label:"右投右打", fn:()=>initGame(sd,nm,pos,{hand:"R",throwHand:"R"}), noEcho:true},
+        {label:"左投左打（稀少價值：選秀評價+、天生剋左打）", fn:()=>initGame(sd,nm,pos,{hand:"L",throwHand:"L"}), noEcho:true},
+      ],"選擇投打：");
+    }
   }
 }
-function initGame(seed, name, pos){
+function initGame(seed, name, pos, hd){
   seedRNG(seed, 0);
   S=newState(seed, name, pos);
+  if(hd){ S.hand=hd.hand||"R"; S.throwHand=hd.throwHand||"R"; }
+  if(S.hand==="S"){ S.meet=Math.max(1,S.meet-1); }
   if(pos==="P"){ S.breaks={"曲球":1}; }
   $log().innerHTML="";
   statusBar();
