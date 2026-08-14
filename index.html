@@ -285,6 +285,7 @@ function moodMod(){
   let m=[0.7,0.85,1.0,1.15,1.3][S.yaruki];
   if(S.ailments.includes("低潮")) m*=0.85;
   if(S.ailments.includes("失眠")) m*=0.9;
+  if(S.ailments.includes("腰痛")) m*=0.92;
   return m;
 }
 function yarukiUp(n){ S.yaruki=Math.min(4,S.yaruki+(n||1)); }
@@ -494,7 +495,9 @@ const P40_REWARD = {
 };
 function practice(kind){
   const d=PRACTICE_DEF[kind];
-  const injRisk = (S.hp<25?0.20:S.hp<45?0.07:0.015) * (1 - Math.min(0.5,S.tough*0.04));
+  let injRisk = (S.hp<25?0.20:S.hp<45?0.07:0.015) * (1 - Math.min(0.5,S.tough*0.04));
+  if(S.abil.includes("受傷○")) injRisk*=0.6;
+  if(S.ailments.includes("腰痛")) injRisk*=1.6;
   if(kind!=="str" && chance(injRisk)){ injuryEvent(); return; }
   const cost = ri(d.cost[0],d.cost[1]);
   S.hp=Math.max(0,S.hp-cost);
@@ -541,6 +544,10 @@ function doRest(){
 }
 function doStudy(){
   S.study=Math.min(100,S.study+ri(4,7));
+  if(S.study>=90 && !S.abil.includes("センス○")){
+    ev("讀書讀出了舉一反三的腦袋——");
+    addAbil("センス○"); sys("能力強化所需點數-13%（文武雙全的天賦）");
+  }
   S.hp=Math.max(0,S.hp-6);
   story("攤開課本和講義。棒球員的身分不是逃避段考的藉口——教練說的。");
   gain("學業+（影響學測與大學選項）　體力-6");
@@ -694,6 +701,9 @@ function theirHalf(inn, foeStr){
       if(S.throwHand==="L"&&bHand==="R"&&hasT("火線交叉")) pK+=0.05;
       if(hasT("速差魔術師")) pK+=0.03;
       if(hasT("配球師")) pK+=0.03;
+      if(hasT("釋球○")) pK+=0.02;
+      if(hasT("內角職人")||hasT("外角職人")) pK+=0.02;
+      if(on1&&hasT("危機○")) pK+=0.05;
       const pBB = Math.max(0.03, 0.12 - ctrlV*0.10 + (tired?0.05:0));
       const pHitA = Math.max(0.08, 0.24 - stuff*0.18 + foeStr*0.014 - ctrlV*0.05 + (tired?0.06:0));
       const r=rnd();
@@ -710,7 +720,7 @@ function theirHalf(inn, foeStr){
         else lines.push("投出四壞。");
         on1=true;
       }else if(r<pK+pBB+pHitA){
-        const hardP = 0.16 + foeStr*0.015 - stuff*0.12 + (same?0:0.04);
+        const hardP = 0.16 + foeStr*0.015 - stuff*0.12 + (same?0:0.04) - (hasT("低球○")?0.03:0);
         if(chance(hardP*0.35)){
           const rr=1+(on1?1:0); runs+=rr; on1=false;
           M.myGame.er+=rr; S.stats.er+=rr;
@@ -721,7 +731,7 @@ function theirHalf(inn, foeStr){
           on1=true;
         }
       }else{
-        const gb = 0.35 + sink*0.05 + fork*0.03;
+        const gb = 0.35 + sink*0.05 + fork*0.03 + (hasT("低球○")?0.06:0);
         if(on1 && outs<2 && chance(gb*(0.5+(hasT("雙殺製造機")?0.15:0)))){
           outs+=2; on1=false; M.myGame.outs+=2; S.stats.outsRec+=2;
           S.flags.tDP=(S.flags.tDP||0)+1;
@@ -737,11 +747,11 @@ function theirHalf(inn, foeStr){
     const pQ = 0.5 - foeStr*0.03;
     runs = chance(0.35-pQ*0.3)? ri(1,2) : chance(0.15)? ri(1,3) : 0;
     if(chance(0.14)){
-      if(chance(0.3+S.fld*0.04)){
+      if(chance(0.3+S.fld*0.04+(hasT("守備職人")?0.15:0))){
         gameLine("　(守) ✨ 強襲球被你飛撲沒收！美技上了轉播精華。","B");
         S.evCoach=Math.min(99,S.evCoach+2);
         runs=Math.max(0,runs-1);
-      }else if(chance(Math.max(0.05,0.25-S.fld*0.012))){
+      }else if(chance(Math.max(0.03,0.25-S.fld*0.012-(hasT("守備職人")?0.08:0)))){
         gameLine("　(守) 💦 你的失誤送給對方壘包……","B");
         S.evCoach=Math.max(0,S.evCoach-2);
         if(chance(0.4)) runs++;
@@ -796,12 +806,12 @@ function myPlateAppearance(inn, foeStr, addP){
   if(r<pK+pBB+Math.max(0.1,pHit)){
     M.myGame.h++; S.stats.h++;
     if(fp.hand==="L") S.flags.tVsL=(S.flags.tVsL||0)+1;
-    const pull = hasT("拉打王")?0.5 : hasT("推打達人")?0.2 : 0.35;
+    const pull = hasT("拉打王")?0.5 : (hasT("推打達人")||hasT("推打"))?0.2 : 0.35;
     const dir = chance(pull)?"pull":chance(0.5)?"push":"mid";
     if(dir==="pull")S.flags.tPull=(S.flags.tPull||0)+1;
     if(dir==="push")S.flags.tPush=(S.flags.tPush||0)+1;
     if(chance(0.5)){ const zk=chance(0.5)?"tIn":"tOut"; S.flags[zk]=(S.flags[zk]||0)+1; }
-    const pHR = Math.min(0.35, S.power*0.0016 + (dir==="pull"?0.04:0) + (adv?0.02:0) + S.traj*0.01);
+    const pHR = Math.min(0.38, S.power*0.0016 + (dir==="pull"?0.04:0) + (adv?0.02:0) + S.traj*0.01 + (hasT("衝擊力")?0.03:0));
     const dirW = dir==="pull"?"強拉左半邊":dir==="push"?"順推右外野":"咬中直擊中堅";
     if(chance(pHR)){
       M.myGame.hr++; S.stats.hr++;
@@ -845,11 +855,16 @@ function finishMatch(){
     gain("勝利！教練評價+5、知名度+2");
     S.evCoach=Math.min(99,S.evCoach+5); S.fame=Math.min(999,S.fame+2);
     yarukiUp();
+    if(S.ailments.includes("低潮")){ S.ailments=S.ailments.filter(a=>a!=="低潮"); sys("勝利的滋味沖散了陰霾——【低潮】治癒！"); }
   }else if(draw){ sys("平手收場。"); S.evCoach=Math.min(99,S.evCoach+1); }
   else{
     loss("輸球了……教練評價-2");
     S.evCoach=Math.max(0,S.evCoach-2);
     if(chance(0.4)) yarukiDn();
+    if(S.yaruki===0 && chance(0.4) && !S.ailments.includes("低潮")){
+      S.ailments.push("低潮");
+      loss("整個人鑽進牛角尖……陷入【低潮】（表現下降；約會或大勝可治癒）");
+    }
   }
   S.hp=Math.max(5, S.hp-15);
   const cb=M.cfg.onEnd;
@@ -872,7 +887,8 @@ function traitProgress(){
   chk("tVsL",6,"左投剋星","對左投手的打擊大幅強化");
   chk("tRead",14,"鷹眼","選球判斷力強化，保送率上升");
   if(S.pos==="P"){
-    chk("comboOK",20,"配球師","配球連攜的三振率上升");
+    chk("comboOK",10,"速差魔術師","速差系配球的三振率上升");
+    chk("comboOK",22,"配球師","所有配球連攜的三振率上升");
     chk("tDP",5,"雙殺製造機","雙殺誘發率大幅上升");
     const tot=(S.flags.zoneIn||0)+(S.flags.zoneOut||0);
     if(tot>=40){
@@ -928,6 +944,7 @@ function doNight(){
   if(r<0.62){
     loss("半夜開始肚子絞痛——路邊攤的生蠔有問題！體力-15、幹勁-1");
     S.hp=Math.max(0,S.hp-15); yarukiDn();
+    if(chance(0.3)&&!S.ailments.includes("失眠")){ S.ailments.push("失眠"); loss("折騰整晚睡不著……染上【失眠】（練習效率下降，靠休息治癒）"); }
     afterAction(); return;
   }
   if(r<0.70){
@@ -1143,6 +1160,7 @@ function dateWith(k){
   };
   story(pick(scenes[k]));
   gain(g.name+"好感上升、體力/狀態回復");
+  if(S.ailments.includes("低潮")){ S.ailments=S.ailments.filter(a=>a!=="低潮"); sys("和"+g.name+"聊了很久……心裡的結打開了，【低潮】治癒！"); }
   if(S.love[k]>=40 && !S.gf){
     ev(g.name+"看你的眼神，已經完全不一樣了——");
     choices([
