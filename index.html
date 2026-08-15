@@ -44,12 +44,35 @@ header .slogan{font-size:.68rem; color:var(--ink2); letter-spacing:clamp(.5px,.3
 #statusbar{
   border-bottom:1px solid var(--rule);
   background:var(--paper2);
-  padding:7px 16px; font-size:.78rem; line-height:1.8;
+  padding:7px 16px; font-size:.78rem; line-height:1.9;
   display:flex; flex-wrap:wrap; gap:2px 14px; color:var(--ink2);
   width:100%; min-width:0;
   position:sticky; top:0; z-index:5;
   font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
+  font-variant-numeric:tabular-nums; letter-spacing:.01em;
 }
+#profileFab{
+  position:fixed; right:14px; bottom:14px; z-index:40; display:none;
+  width:46px; height:46px; border-radius:50%; border:2px solid var(--ink);
+  background:var(--paper2); font-size:1.25rem; cursor:pointer;
+  box-shadow:2px 3px 0 rgba(0,0,0,.3);
+}
+#profileFab:active{transform:translate(1px,1px);}
+#profileOverlay{
+  display:none; position:fixed; inset:0; z-index:50;
+  background:rgba(30,25,15,.45); overflow:auto; padding:18px 10px;
+}
+#profileOverlayInner{
+  max-width:760px; margin:0 auto; background:var(--paper);
+  border:2px solid var(--ink); box-shadow:4px 5px 0 rgba(0,0,0,.35); padding:12px 16px 18px;
+}
+#profileOverlayTop{
+  display:flex; justify-content:space-between; align-items:center;
+  border-bottom:2px solid var(--ink); padding-bottom:6px; margin-bottom:8px;
+  font-family:"Noto Sans TC",sans-serif; font-size:.85rem; font-weight:700;
+}
+#profileOverlayTop button{border:1px solid var(--ink); background:var(--paper2); padding:4px 10px; cursor:pointer; font-size:.8rem;}
+.ov-head{font-size:1rem; font-weight:700; margin:4px 0 6px;}
 #statusbar>span{min-width:0;}
 #statusbar b{color:var(--ink); font-weight:700;}
 #statusbar .hp-low b, b.hp-low{color:var(--red);}
@@ -102,6 +125,10 @@ header .slogan{font-size:.68rem; color:var(--ink2); letter-spacing:clamp(.5px,.3
   transition:transform .08s, box-shadow .08s;
   min-width:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;
   line-height:1.45;
+  font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.01em;
+  line-height:1.55;
 }
 #choices button:hover{ transform:translate(1px,1px); box-shadow:1px 1px 0 rgba(0,0,0,.25); background:#fff; }
 #choices button.primary{ border-width:2px; }
@@ -194,6 +221,11 @@ input, textarea{
     <div class="slogan">─ 台灣文字棒球人生模擬・每一顆球都算數 ─</div>
   </header>
   <div id="statusbar"></div>
+  <button id="profileFab" onclick="toggleProfileOverlay()" title="個人資料">📋</button>
+  <div id="profileOverlay"><div id="profileOverlayInner">
+    <div id="profileOverlayTop"><span>選手個人資料（隨時可看・不影響進行）</span><button onclick="toggleProfileOverlay(false)">✕ 關閉</button></div>
+    <div id="profileOverlayBody"></div>
+  </div></div>
   <div id="log"></div>
   <div id="choices"></div>
   <footer>同一個種子＋同樣的選擇＝同樣的野球人生。存檔碼可隨時匯出／匯入。</footer>
@@ -254,7 +286,7 @@ function newState(seed, name, pos){
     year:2026, age:16,                    // 高一入學
     hp:70, maxHp:100,
     yaruki:2, tough:5, ailments:[],
-    study:40,                             // 學業（影響學測/大學選項）
+    study:58,                             // 學業（影響學測/大學選項；高中低於50禁賽）
     expK:10, expG:10, expS:5,             // 筋力/技術/(敏捷 or 變化球)
     traj:2, meet:2, power:24, run:6, arm:6, fld:6,
     velo:118, ctrl:60, stam:45, breaks:{},
@@ -1243,11 +1275,11 @@ function statusBar(){
   if(S.phase==="hs"){
     const t=CAL[Math.min(S.turn,CAL.length-1)];
     dateTxt = t? ("民國"+(S.year-1911)+"年・"+t.label) : "";
-    stage = (t? ("高"+t.g+"　"+SCHOOL) : SCHOOL)+"・"+fieldPositionShort()+"・"+handLabel();
+    stage = (t? ("高"+t.g+"　"+SCHOOL) : SCHOOL)+"・"+S.age+"歲・"+fieldPositionShort()+"・"+handLabel();
     mastReset("西元"+S.year+"年", "第"+(S.turn+1)+"號");
   }else{
     dateTxt = "西元"+S.year+"年";
-    stage = (S.team||"")+(S.level?("・"+S.level):"")+"・"+fieldPositionShort();
+    stage = (S.team||"")+(S.level?("・"+S.level):"")+"・"+S.age+"歲・"+fieldPositionShort();
     mastReset("西元"+S.year+"年", S.age+"歲");
   }
   const hpCls = S.hp<35?"hp-low":"";
@@ -1267,7 +1299,7 @@ function statusBar(){
   let extraSeg;
   if(S.phase==="hs"){
     extraSeg = "<span>點數 筋<b>"+S.expK+"</b> 技<b>"+S.expG+"</b> "+sName+"<b>"+S.expS+"</b></span>"
-      +"<span>教練評價<b>"+S.evCoach+"</b>　學業<b>"+S.study+"</b></span>"
+      +"<span>教練評價<b>"+S.evCoach+"</b>　學業"+(S.study<50?"<b class='hp-low'>"+S.study+"（禁賽線50）</b>":"<b>"+S.study+"</b>")+"</span>"
       +"<span>球探 中職<b>"+S.scout.cpbl+"</b> 日職<b>"+S.scout.npb+"</b> 美職<b>"+S.scout.mlb+"</b></span>";
   }else{
     const ct=S.contract,ctText=ct?("　合約剩<b>"+ct.yearsLeft+"年</b>"):"";
@@ -1280,6 +1312,41 @@ function statusBar(){
    +"<span>狀態 <b>"+moodName(S.yaruki)+"</b></span>"
    +"<span>"+ab+"</span>"
    + extraSeg;
+  const fab=document.getElementById("profileFab");
+  if(fab&&fab.style)fab.style.display=S?"block":"none";
+}
+/* ---- 隨時可開的個人資料浮動面板（不動報紙內文，比賽中也能看） ---- */
+function profileOverlayHTML(){
+  ensurePlayerSystems();
+  let h='<div class="ov-head">'+(S.nickname?("「"+esc(S.nickname)+"」"):"")+esc(S.name)+"　"+S.age+"歲　"+esc(fieldPositionLabel())+"・"+esc(handLabel())+'</div>';
+  if(S.pos==="P"){
+    const breakTotal=currentPotentialFloor(S,"breakTotal");
+    h+='<div class="ability-section-title">投手能力</div><div class="statgrid">'
+      +statAbilityCell("velo","球速",S.velo+" km/h",null)+statAbilityCell("ctrl","控球",S.ctrl,null)
+      +statAbilityCell("stam","耐力",S.stam,null)+statAbilityCell("breakTotal","變化球",breakTotal+"格",null)+'</div>';
+    h+='<div class="statgrid">'+Object.entries(S.breaks).map(([k,v])=>'<div class="cell">'+esc(k)+' <b>Lv'+v+'</b></div>').join('')+'</div>';
+    h+='<div class="statgrid"><div class="cell">定位 <b>'+pitchRoleLabel(S.phase==="pro"&&S.currentPitchRole?S.currentPitchRole:recommendPitchRole())+'</b></div>'
+      +'<div class="cell">手臂 <b>'+armStatus()+'</b><br>可用 '+Math.round(S.armHealth.readiness)+'／負荷 '+S.armHealth.load.toFixed(1)+'/'+armCap()+'</div></div>';
+  }
+  if(S.pos!=="P"||S.twoWay){
+    h+='<div class="ability-section-title">打擊能力</div><div class="statgrid">'
+      +statAbilityCell("traj","彈道","Lv"+S.traj,null)+statAbilityCell("meet","接觸",S.meet,null)
+      +statAbilityCell("power","力量",S.power,null)+statAbilityCell("run","跑力",S.run,null)
+      +statAbilityCell("arm","肩力",S.arm,null)+statAbilityCell("fld","守備",S.fld,null)+'</div>';
+    h+=renderPositionAptitudesHTML();
+  }
+  const sName=S.twoWay?"變/敏":S.pos==="P"?"變化":"敏捷";
+  h+='<div class="statgrid"><div class="cell">點數 筋<b>'+S.expK+'</b> 技<b>'+S.expG+'</b> '+sName+'<b>'+S.expS+'</b></div>'
+    +'<div class="cell">知名度 <b>'+S.fame+'</b>'+(S.phase==="hs"?('<br>球探 中'+S.scout.cpbl+'・日'+S.scout.npb+'・美'+S.scout.mlb):('<br>綜合戰力 <b>'+overall()+'</b>'))+'</div></div>';
+  h+='<div class="ability-section-title">特殊能力</div>'+renderAbilitiesHTML();
+  h+='<div class="ability-section-title">生涯特性</div>'+renderTraitsHTML();
+  return h;
+}
+function toggleProfileOverlay(force){
+  const ov=document.getElementById("profileOverlay");if(!ov)return;
+  const show=force!=null?force:ov.style.display!=="block";
+  if(show&&S){ document.getElementById("profileOverlayBody").innerHTML=profileOverlayHTML(); ov.style.display="block"; }
+  else ov.style.display="none";
 }
 function fmtMoney(w){ // 萬台幣
   if(w>=10000) return (w/10000).toFixed(1)+"億";
@@ -1404,6 +1471,7 @@ function runTurn(){
   actionMenu();
 }
 function endTurn(){
+  if(S.turn%3===2){ S.study=Math.max(0,S.study-1); if(S.study===49)sys("⚠ 導師拿著成績單到球場：「學業掉到50以下，依校規禁止出賽！」"); }
   const prevY = calNow().m;
   S.turn++;
   if(S.pos==="P"){
@@ -1541,11 +1609,11 @@ function actionMenu(){
   list.push({label:pLabel("重量訓練","kin"), fn:()=>practice("kin")});
   list.push({label:pLabel("跑步","run"), fn:()=>practice("run")});
   list.push({label:pLabel("伸展保養","str")+"・體力+", fn:()=>practice("str")});
-  list.push({label:"讀書｜學業+4~7", fn:doStudy});
+  list.push({label:"讀書｜學業+（可選強度）", fn:studyMenu});
   list.push({label:"休息｜體力+32~48", fn:doRest});
   list.push({label:"出去晃晃", fn:urotsukiMenu});
   list.push({label:"聯絡・約會", fn:phoneMenu});
-  list.push({label:"能力強化", fn:()=>allocMenu(actionMenu)});
+  list.push({label:"能力強化（不耗回合）", fn:()=>allocMenu(actionMenu)});
   list.push({label:"個人資料", fn:()=>showProfile(actionMenu), small:true});
   list.push({label:"存檔", fn:saveMenu, small:true});
   choices(list, "體力 "+S.hp+"/"+S.maxHp+"　狀態："+moodName(S.yaruki)+"　學業："+S.study
@@ -1591,21 +1659,42 @@ function practice(kind){
     loss("復健醫囑禁止投球專項；距離預定回歸還有"+(S.flags.pitchUnavailableUntilTurn-S.turn)+"週。");
     next(null,actionMenu);return;
   }
-  let injRisk = (S.hp<25?0.20:S.hp<45?0.07:0.015) * (1 - Math.min(0.5,S.tough*0.04));
+  if(kind==="str"){ practiceWith(kind,"std"); return; } // 保養不分檔
+  choices([
+    {label:"保守練｜效果×0.7・體力消耗低・幾乎不受傷",fn:()=>practiceWith(kind,"safe")},
+    {label:"照表練｜標準效果",primary:true,fn:()=>practiceWith(kind,"std")},
+    {label:"梭哈特訓｜效果×1.6・體力×1.5・受傷率大增，失敗恐扣點數",cls:"risk",fn:()=>practiceWith(kind,"allin")},
+  ],"「"+(d.label||kind)+"」要用什麼強度？（狀態與健康運會影響梭哈的風險）");
+}
+function practiceWith(kind,tier){
+  const d=PRACTICE_DEF[kind];
+  const throwing=["nage","shadow","henka"].includes(kind);
+  const tierMul=tier==="safe"?0.7:tier==="allin"?1.6:1;
+  const tierCost=tier==="safe"?0.6:tier==="allin"?1.5:1;
+  const tierInj=tier==="safe"?0.35:tier==="allin"?2.1:1;
+  let injRisk = (S.hp<25?0.20:S.hp<45?0.07:0.015) * (1 - Math.min(0.5,S.tough*0.04)) * tierInj;
   if(S.ailments.includes("腰痛")) injRisk*=1.6;
   injRisk *= (1.36 - diceMod("health")*0.12);   // 健康運：骰6→×0.64、骰1→×1.24
   if(S.twoWay && kind!=="str") injRisk*=1.25;
   injRisk*=traitInjuryMult();
   if(throwing)injRisk*=1+Math.max(0,S.armHealth.load/armCap()-0.5)+Math.max(0,55-S.armHealth.readiness)/70;
-  if(kind!=="str" && chance(injRisk)){ injuryEvent(kind); return; }
+  if(kind!=="str" && chance(injRisk)){
+    if(tier==="allin"){
+      /* 梭哈特訓拉傷：直接扣既有點數當學費 */
+      const pk=Math.min(S.expK,4),pg=Math.min(S.expG,4),ps=Math.min(S.expS,4);
+      S.expK-=pk;S.expG-=pg;S.expS-=ps;
+      loss("硬上強度的代價——動作走樣白練一場，筋-"+pk+"、技-"+pg+"、另-"+ps+"點。");
+    }
+    injuryEvent(kind); return;
+  }
   const baseCost = ri(d.cost[0],d.cost[1]);
-  const cost = Math.ceil(baseCost*(S.twoWay&&kind!=="str"?1.15:1));
+  const cost = Math.ceil(baseCost*(S.twoWay&&kind!=="str"?1.15:1)*tierCost);
   S.hp=Math.max(0,S.hp-cost);
   if(kind==="str") S.hp=Math.min(S.maxHp,S.hp+10);
-  if(throwing)addArmLoad(kind==="nage"?24:kind==="henka"?16:10,"norm",0.9);
+  if(throwing)addArmLoad(kind==="nage"?24:kind==="henka"?16:10,tier==="allin"?"full":tier==="safe"?"rest":"norm",0.9);
   if(kind==="str"){recoverArm(3,true);S.traitCounters.careActions++;}
-  story(d.txt);
-  const msg = spGain(d.k,d.g,d.s);
+  story(d.txt+(tier==="allin"?"——今天把自己逼到吐為止。":tier==="safe"?"——點到為止，留力氣給明天。":""));
+  const msg = spGain(Math.round(d.k*tierMul),Math.round(d.g*tierMul),Math.round(d.s*tierMul));
   if(d.tough){ S.tough=Math.min(20,S.tough+d.tough); }
   if(chance(0.55)){ S.evCoach=Math.min(99,S.evCoach+1); }
   gain(msg+"（體力"+(kind==="str"?"+":"-")+Math.abs(kind==="str"?10-cost:cost)+"）");
@@ -1677,6 +1766,27 @@ function doStudy(){
   afterAction();
 }
 
+function studyMenu(){
+  choices([
+    {label:"隨便翻翻｜學業+2~3・體力-2",fn:()=>doStudyTier("safe")},
+    {label:"認真讀｜學業+4~7・體力-6",primary:true,fn:()=>doStudyTier("std")},
+    {label:"爆肝衝刺｜學業+8~12・體力-14・恐失眠",cls:"risk",fn:()=>doStudyTier("allin")},
+  ],"段考與學測看累積；爆肝有代價。");
+}
+function doStudyTier(tier){
+  const add=tier==="safe"?ri(2,3):tier==="allin"?ri(8,12):ri(4,7);
+  const cost=tier==="safe"?2:tier==="allin"?14:6;
+  S.study=Math.min(99,S.study+add);S.hp=Math.max(0,S.hp-cost);
+  story(tier==="allin"?"檯燈亮到凌晨三點。單字本的邊角捲了起來。":"攤開課本和講義。棒球員的身分不是逃避段考的藉口——教練說的。");
+  gain("學業+"+add+"（體力-"+cost+"）");
+  if(tier==="allin"&&chance(0.3)&&!S.ailments.includes("失眠")){S.ailments.push("失眠");loss("熬過頭了……【失眠】纏身（練習效率下降，休息可癒）");}
+  if(tier!=="safe"&&chance(0.3)){ S.expG+=3; gain("讀書讀出心得，技術+3（配球與觀察力）"); }
+  if(S.study>=60&&chance(0.2)&&!S.abil.includes("センス○")){
+    ev("讀書讀出了舉一反三的腦袋——");
+    addAbil("センス○"); sys("能力強化所需點數-13%（文武雙全的天賦）");
+  }
+  afterAction();
+}
 /* ---- 行動後 ---- */
 function afterAction(){
   statusBar();
@@ -1873,6 +1983,31 @@ function startMatch(cfg){
   cfg.roundKey=cfg.roundKey||cfg.name||"game";
   cfg.matchKey=cfg.matchKey||(S.seed+"::"+cfg.competitionKey+"::"+S.year+"::"+cfg.roundKey);
   ensurePlayerSystems();
+  if(S.phase==="hs"&&S.study<50){
+    S.flags.benchedCount=(S.flags.benchedCount||0)+1;
+    if(S.flags.benchedCount>=5){
+      hr();head("除名通知","學業長期未達標");
+      story("教務會議的決議送到了球隊：累計五次因學業禁賽，依校規取消球員資格。阿誠教練把你的名牌從打線板上拿下來，很輕，也很重。");
+      talk("阿誠教練","……棒球沒有對不起你，是你自己先放掉的。去把書讀完吧。");
+      careerEnding("因學業荒廢遭校隊除名");return;
+    }
+    hr();head("禁賽通知　"+cfg.name,"學業未達出賽標準（50）・累計第"+S.flags.benchedCount+"次");
+    if(S.flags.benchedCount===3){
+      talk("阿誠教練","（把成績單拍在置物櫃上）第三次了。再兩次，你就不是這支球隊的人——我說到做到。");
+      loss("教練的最後通牒……狀態大跌");yarukiDn(2);
+    }
+    story("賽前一天，教務處的公文貼到了球員休息室：你的學業成績未達出賽門檻，本場只能坐在看台。阿誠教練把帽子壓得很低，一句話也沒說。");
+    const winP=Math.max(0.10,Math.min(0.6,0.42-cfg.foeStr*0.03+hsMatchGrade()*0.02));
+    const win=chance(winP);
+    S.hsRecord=S.hsRecord||{w:0,l:0};
+    if(win){S.hsRecord.w++;gameLine("　沒有你的比賽，隊友咬牙撐下——險勝！但你的名字不在任何一欄。","B");S.evCoach=Math.max(0,S.evCoach-1);}
+    else{S.hsRecord.l++;gameLine("　輸球……你在看台上握緊的拳頭，沒有任何地方可以揮。");S.evCoach=Math.max(0,S.evCoach-3);loss("教練評價-3：「連上場的資格都顧不好。」");}
+    yarukiDn();
+    sys("把學業讀回50以上就能重返球場（讀書可拉、每三週會自然下滑1）。");
+    statusBar();
+    if(cfg.onEnd){next(null,()=>cfg.onEnd(win));}else next(null,actionMenu);
+    return;
+  }
   const rngStart=S.rngCalls;
   const role=S.pos==="P"?recommendPitchRole():null;
   const cap=role&&role!=="OUT"?pitcherCapacity(role,"norm"):0;
@@ -2228,6 +2363,49 @@ function traitProgress(){
 }
 /* ================= 出去晃晃（台灣小鎮）＋ 戀愛線 ================= */
 
+/* ---- 小鎮打工／幫忙：三檔應對（懲罰、道具或點數都在骰盅裡） ---- */
+const TOWN_HELP={
+  night:{who:"鹽酥雞攤老闆",ask:"「少年欸，人手不夠，來炸台幫忙切兩小時？」",
+    reward:(mul)=>{S.hp=Math.min(S.maxHp,S.hp+6);const g=spGain(Math.round(2*mul),0,Math.round(1*mul));gain("端盤子練出下盤與反應："+g+"、體力+6（吃到飽）");}},
+  shop:{who:"球具行老闆",ask:"「倉庫剛到一批護具，幫我上架，工錢用店裡的東西抵。」",
+    reward:(mul)=>{
+      if(mul>=3.5){const eq=pick(["飛翔球棒","職人手套","疾風釘鞋"].filter(e=>!S.items.includes(e)));
+        if(eq){S.items.push(eq);gain("老闆拍拍你的肩：「這個，配得上你。」獲得【"+eq+"】！");return;}}
+      const g=spGain(Math.round(1*mul),Math.round(2*mul),0);gain("摸遍各款球具，手感更細了："+g);}},
+  library:{who:"圖書館館員",ask:"「書車堆成山了……幫我歸架，順便你也複習。」",
+    reward:(mul)=>{S.study=Math.min(99,S.study+Math.round(2*mul));const g=spGain(0,Math.round(2*mul),0);gain("邊歸架邊背公式：學業+"+Math.round(2*mul)+"、"+g);}},
+  breakfast:{who:"阿桃早點老闆娘",ask:"「尖峰時段快忙翻了！圍裙穿上，煎台交給你！」",
+    reward:(mul)=>{S.hp=Math.min(S.maxHp,S.hp+Math.round(6*mul));yarukiUp();gain("煎台功夫了得，老闆娘塞給你雙倍蛋餅：體力+"+Math.round(6*mul)+"、狀態+1");}},
+  temple:{who:"廟公",ask:"「慶典要到了，幫忙扛轎腳，神明會保庇你。」",
+    reward:(mul)=>{const g=spGain(Math.round(3*mul),0,0);S.fame+=Math.round(1*mul);gain("扛轎練出的腰腿："+g+"、地方名聲+"+Math.round(1*mul));}}
+};
+function townHelp(key,back){
+  const h=TOWN_HELP[key];if(!h){back();return;}
+  talk(h.who,h.ask);
+  const settle=(tier)=>{
+    const p=tier==="safe"?0.82:tier==="std"?0.6:0.45;
+    const mul=tier==="safe"?1:tier==="std"?2:3.5;
+    const ok=chance(Math.max(0.15,Math.min(0.95,p+(S.yaruki-2)*0.04+(S.traits.genius?0.1:0)+(S.traits.clutch&&tier==="allin"?0.15:0))));
+    if(ok){ h.reward(mul); if(tier==="allin")extra("賣力演出，全場叫好！"); }
+    else{
+      if(tier==="safe"){ loss("幫得普普通通，只換到一句「辛苦啦」。"); }
+      else if(tier==="std"){ S.hp=Math.max(0,S.hp-8); yarukiDn(); loss("越幫越忙……體力-8、狀態-1"); }
+      else{
+        S.hp=Math.max(0,S.hp-14); yarukiDn(2);
+        const pk=Math.min(S.expK,3),pg=Math.min(S.expG,3);S.expK-=pk;S.expG-=pg;
+        loss("逞強砸鍋——打翻整鍋／撞倒書車／轎槓壓到肩。體力-14、狀態-2、筋-"+pk+"技-"+pg+"點（賠不是的代價）");
+        if(chance(0.25)&&!S.ailments.includes("腰痛")){S.ailments.push("腰痛");loss("腰還閃到了……【腰痛】");}
+      }
+    }
+    statusBar();next(null,back);
+  };
+  choices([
+    {label:"幫一點小忙｜穩穩做・小回報",fn:()=>settle("safe")},
+    {label:"認真幫到底｜標準付出・標準回報",fn:()=>settle("std")},
+    {label:"梭哈式賣命｜大回報（道具機率）・搞砸會賠",cls:"risk",fn:()=>settle("allin")},
+    {label:"「今天先不了。」",fn:back,noEcho:true},
+  ],"小鎮的人情往來：成敗由目前種子的亂數決定，同種子＋同選擇＝同結果。");
+}
 function urotsukiMenu(){
   hr(); head("小鎮巡禮", "出去晃晃也會消耗一週");
   choices([
@@ -2247,6 +2425,7 @@ function doNight(){
   S.flags.night=(S.flags.night||0)+1;
   story("夜市的燈一路亮到底，鹽酥雞的香味混著遊戲攤的吆喝。");
   S.hp=Math.min(S.maxHp,S.hp+12); yarukiUp();
+  if(chance(0.3)){ townHelp("night",afterAction); return; }
   const r=rnd();
   if(r<0.3){
     ev("九宮格投球攤！老闆娘喊：全中送大獎——");
@@ -2282,6 +2461,7 @@ function doNight(){
 
 /* ---- 球具行 ---- */
 function doShop(){
+  if(chance(0.3)){ story("店門口堆著剛到的紙箱。"); townHelp("shop",afterAction); return; }
   S.flags.shop=(S.flags.shop||0)+1;
   const n=S.flags.shop;
   story("「全壘打堂」的老闆是個退役老選手，店裡掛著他當年的剪報。");
@@ -2335,6 +2515,7 @@ function doShop(){
 
 /* ---- 圖書館（學業＋學姊線） ---- */
 function doLibrary(){
+  if(chance(0.3)){ story("館員推著滿載的書車經過，車輪吱呀作響。"); townHelp("library",afterAction); return; }
   story("圖書館的冷氣總是特別強。你攤開課本，也攤開了睡意。");
   S.study=Math.min(100,S.study+ri(5,9));
   gain("學業+（比自己讀有效率）");
@@ -2354,6 +2535,7 @@ function doLibrary(){
 
 /* ---- 早餐店（第三女角） ---- */
 function doBreakfast(){
+  if(chance(0.3)){ story("店裡排隊排到騎樓，老闆娘的額頭全是汗。"); townHelp("breakfast",afterAction); return; }
   story("「阿桃早點」的鐵板滋滋作響，蛋餅香得罪惡。");
   S.hp=Math.min(S.maxHp,S.hp+15);
   if(!S.gf && chance(0.55)){
@@ -2433,6 +2615,7 @@ function dormBlack(){
 
 /* ---- 廟口抽籤 ---- */
 function doOmikuji(){
+  if(chance(0.25)){ story("廟埕前搭起了棚架，慶典的鑼鼓正試音。"); townHelp("temple",afterAction); return; }
   story("廟口的香火很旺。你擲了筊，搖出一支籤。");
   const r=rnd();
   if(r<0.15){ ev("上上籤！「潛龍勿用，一飛沖天」"); addAbil("機會○"); yarukiUp(2); gain("狀態+2"); }
@@ -3744,20 +3927,104 @@ function proMonthAction(mLabel, monthGames){
   list.push({label:"重量訓練｜筋10 變/敏3・疲勞+5", fn:()=>act(()=>{ const m=spGain(10,0,3); S.fatigue=Math.min(100,S.fatigue+5); gain(m+"（疲勞+5）"); })});
   list.push({label:"影片研究對手"+(S.flags.analyst?"（小黑加成）":""), fn:()=>act(()=>{ S.sea.monthPerf=S.flags.analyst?0.09:0.06; S.expG+=6; gain("技術+6　本月比賽表現+"+(S.flags.analyst?"+（小黑的逐格分析！）":"（研究奏效）")); })});
   list.push({label:"徹底保養", fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); if(S.pos==="P"){recoverArm(7,true);S.traitCounters.careActions++;} gain("疲勞-22、體力+20"+(S.pos==="P"?"、手臂回復":"")); })});
-  list.push({label:"場外行程｜媒體、贊助與夜生活的取捨",fn:()=>offFieldCareerEvent(()=>act(()=>{}))});
   if(S.gf||S.married){
     list.push({label:S.married?"陪伴家人":"與"+GF[S.gf].name+"約會", fn:()=>act(()=>{ yarukiUp(2); S.fatigue=Math.max(0,S.fatigue-12); gain("狀態+2、疲勞-12（心的充電）"); })});
   }
-  list.push({label:"能力強化", fn:()=>allocMenu(()=>proMonthAction(mLabel,monthGames))});
+  list.push({label:"能力強化（不耗行動）", fn:()=>allocMenu(()=>proMonthAction(mLabel,monthGames)), small:true});
   list.push({label:"個人資料", fn:()=>showProfile(()=>proMonthAction(mLabel,monthGames)), small:true});
   list.push({label:"存檔", fn:saveMenu, small:true});
   choices(list,"本月的自由時間要怎麼用？（點數可到「能力強化」升能力）");
   function act(f){
     f();statusBar();
     const go=()=>next("進入"+mLabel+"賽程",nextGame);
-    if(S.pos==="P"&&resolveArmCrisis(go,{forced:false,sea:S.sea}))return;
-    go();
+    const cont=()=>{ if(S.pos==="P"&&resolveArmCrisis(go,{forced:false,sea:S.sea}))return; go(); };
+    if(chance(0.16)){ proEventCard(cont); return; }
+    cont();
   }
+}
+/* ---- 職業事件卡：隨機觸發，三檔應對（保守／照常／梭哈） ---- */
+const PRO_EVENT_CARDS=[
+  {t:"媒體通告日",story:"轉播單位邀你上棚錄專訪，經紀人把行程表推到你面前。",kind:"media"},
+  {t:"贊助商晚宴",story:"球鞋品牌的年度晚宴。名片、酒杯與鎂光燈，全都在等你表態。",kind:"media"},
+  {t:"私人牌局邀約",story:"隊上前輩傳來訊息：「今晚老地方，缺一咖。」",kind:"gamble"},
+  {t:"偏鄉棒球教室",story:"基金會問你願不願意去東部帶一天小球員訓練。",kind:"charity"},
+  {t:"球迷見面會",story:"球團安排的簽名會，隊伍從賣店排到停車場。",kind:"media"},
+  {t:"老將的深夜特訓",story:"更衣室最資深的前輩丟來一句：「留下來，我教你一招吃飯的。」",kind:"train"}
+];
+function proCardSuccess(tier){
+  let p=tier==="safe"?0.82:tier==="std"?0.6:0.42;
+  p+=(S.yaruki-2)*0.03;
+  if(S.traits.genius||S.traits.late)p+=0.08;
+  if(S.traits.clutch&&tier==="allin")p+=0.15;
+  if(S.traits.distract)p-=0.08;
+  if(S.traits.thief)p-=0.10;
+  return Math.max(0.12,Math.min(0.95,p));
+}
+function proEventCard(done){
+  const pool=PRO_EVENT_CARDS.slice();
+  if(S.gf||S.married)pool.push({t:"深夜的曖昧私訊",story:"陌生號碼傳來一張酒吧包廂的定位。「一個人？」",kind:"affair"});
+  const c=pick(pool);
+  hr();head("場外突發・"+c.t,"自由時間也有價格");
+  story(c.story);
+  const settle=(tier)=>{
+    if(tier==="safe"){
+      S.flags.discChoices=(S.flags.discChoices||0)+1;
+      if(S.age<25&&S.flags.discChoices>=12)unlockTrait("disc","25歲前持續節制場外行程");
+    }else noteOffFieldDistraction();
+    const ok=chance(proCardSuccess(tier));
+    if(c.kind==="affair"&&tier==="allin"){
+      S.flags.affairs=(S.flags.affairs||0)+1;S.fatigue=Math.min(100,S.fatigue+12);
+      if(ok){story("你把私事壓在鏡頭之外，但說過的謊不會自動消失。");}
+      else{
+        const lm=traitFailureLossMultiplier("relationship"),fl=Math.max(1,Math.round(10*lm)),ml=Math.max(1,Math.round(2*lm));
+        S.flags.caughtAffairs=(S.flags.caughtAffairs||0)+1;S.fame=Math.max(0,S.fame-fl);yarukiDn(ml);
+        loss("感情風波登上頭版：知名度-"+fl+"、狀態-"+ml+(S.traits.scum?"（渣男特性放大代價）":"")+"。");
+        if(S.flags.caughtAffairs>=2){unlockTrait("scum","兩次感情背叛被發現");unlockTrait("cancer","重複感情風波引發更衣室信任危機");}
+        if(S.married&&chance(0.5)){
+          if(chance(0.4)){story("你在雨裡站了一夜道歉。"+(S.flags.spouse||"她")+"最後只說：「最後一次。」");}
+          else{
+            const ex=S.flags.spouse||"妻子";
+            story("律師函比你的道歉先到。離婚協議書上的簽名欄，空得刺眼。");
+            loss("離婚……狀態重挫、兩項能力-2");
+            S.married=false;S.flags.spouse=null;S.flags.divorces=(S.flags.divorces||0)+1;
+            S.flags.exes=Array.isArray(S.flags.exes)?S.flags.exes:[];S.flags.exes.push(ex);
+            S.flags.relationships=(S.flags.relationships||0)+1;
+            yarukiDn(2);S.power=Math.max(1,S.power-2);S.meet=Math.max(1,S.meet-2);
+          }
+        }else if(!S.married&&S.gf&&chance(0.5)){
+          story(GF[S.gf].name+"看到新聞後只回了一句：「我們到這裡。」");
+          S.flags.relationships=(S.flags.relationships||0)+1;
+          S.flags.exes=Array.isArray(S.flags.exes)?S.flags.exes:[];S.flags.exes.push(GF[S.gf].name);
+          S.gf=null;S.flags.datingYears=0;yarukiDn(1);
+        }
+      }
+      statusBar();next(null,done);return;
+    }
+    const mul=tier==="safe"?1:tier==="std"?2:3.5;
+    if(ok){
+      if(c.kind==="media"){S.fame+=Math.round(2*mul);gain("形象加分！知名度+"+Math.round(2*mul)+(tier==="allin"?"，全場焦點都是你":""));}
+      else if(c.kind==="gamble"){S.fame+=Math.round(1*mul);gain("及時離桌，人脈與話題性+"+Math.round(1*mul));}
+      else if(c.kind==="charity"){S.fame+=Math.round(2*mul);S.flags.hof=(S.flags.hof||0)+Math.round(mul);yarukiUp();gain("孩子們的眼神比獎盃真——知名度+"+Math.round(2*mul)+"、名人堂風評+、狀態+1");}
+      else{const g=spGain(Math.round(2*mul),Math.round(2*mul),Math.round(1*mul));S.fatigue=Math.min(100,S.fatigue+(tier==="allin"?10:4));gain("前輩的私房課："+g);}
+      if(tier==="allin")extra("豪賭成功！");
+    }else{
+      if(c.kind==="gamble"&&tier!=="safe"){
+        S.flags.gambleFailures=(S.flags.gambleFailures||0)+1;S.fame=Math.max(0,S.fame-3);
+        loss("牌局失控，隊友與媒體開始質疑你的專注。");
+        if(S.flags.gambleFailures>=10)unlockTrait("cancer","場外豪賭失敗累積十次");
+      }else if(tier==="safe"){loss("行程平淡收場，沒虧沒賺。");}
+      else{
+        S.fame=Math.max(0,S.fame-Math.round(2*mul));S.fatigue=Math.min(100,S.fatigue+8);yarukiDn(tier==="allin"?2:1);
+        loss("處理失當……知名度-"+Math.round(2*mul)+"、疲勞+8"+(tier==="allin"?"、狀態-2":""));
+      }
+    }
+    statusBar();next(null,done);
+  };
+  choices([
+    {label:"保守應對｜穩穩處理・小幅收穫",fn:()=>settle("safe")},
+    {label:"照常出席｜標準風險・標準報酬",fn:()=>settle("std")},
+    {label:"梭哈！｜全力經營・成敗都是大的",cls:"risk",fn:()=>settle("allin")},
+  ],"職業場外事件為隨機觸發；梭哈失敗會累積生涯豪賭／緋聞紀錄（毒瘤、渣男、外務纏身都在這條路上）。");
 }
 function eventSuccessChance(base){
   ensurePlayerSystems();
