@@ -1680,7 +1680,10 @@ function doStudy(){
 /* ---- 行動後 ---- */
 function afterAction(){
   statusBar();
-  if(chance(0.22)){ randomEvent(()=>next(null,endTurn)); }
+  if(chance(0.22)){
+    if(chance(0.5)) hsEventCard(()=>next(null,endTurn));
+    else randomEvent(()=>next(null,endTurn));
+  }
   else next(null, endTurn);
 }
 
@@ -1891,7 +1894,9 @@ function startMatch(cfg){
       :role==="OUT"?"醫療／體能報告不准你登板，今天由隊友投完整場。":"你從牛棚待命，預計負責第"+pStart+"局起的短局數。")
       : ("你以第4棒出賽"+(S.hand==="S"?("，站上"+handTxt(side)+"打席"):"")+"——對戰"+(adv?"反手優勢。":"同側，變化球會外逃。"))));
   sys("狀態："+moodName(S.yaruki)+"　（戰況由能力・特性・左右對決加權擲骰自動進行）");
-  out(matchFactorPanel(cfg,role,cap,adv,fp),"story");
+  sys("球探情報：對手強度"+cfg.foeStr+"/9・"+handTxt(fp.hand)+"投・"+fp.type
+    +(S.pos==="P"&&role!=="OUT"?("　你："+pitchRoleLabel(role)+"（容量約"+cap+"球）"):"")
+    +(S.pos!=="P"||S.twoWay?(adv?"　左右對決有利":""):""));
   if(S.pos==="P"&&role!=="OUT"){
     choices([
       {label:"普通投｜標準球威・容量約"+cap+"球",primary:true,fn:()=>{setMatchPitchPlan("norm");simulateGame();}},
@@ -2111,7 +2116,6 @@ function finishMatch(){
   hr();
   const win=M.scoreUs>M.scoreThem, draw=M.scoreUs===M.scoreThem;
   head("賽末快報", HOMENAME+" "+M.scoreUs+" : "+M.scoreThem+" "+M.cfg.foe+"　──"+(win?"勝利！":draw?"平手":"敗戰"));
-  sys("本場從種子亂數位置 #"+M.rngStart+"開始，共使用 "+(S.rngCalls-M.rngStart)+" 次取樣；同種子＋完整相同流程與選擇會重現相同戰報。");
   const g=M.myGame, bat=g.bat, pit=g.pit;
   const hasPit=S.pos==="P"&&pit.outs>0, hasBat=S.pos!=="P"||S.twoWay;
   if(hasPit){
@@ -2501,6 +2505,74 @@ function dateWith(k){
 }
 
 /* ---- 隨機事件 ---- */
+/* ---- 高中事件卡：三檔風險回應（保守／標準／梭哈） ---- */
+const HS_EVENT_CARDS=[
+  {t:"特打加練",need:"B",story:"阿誠教練把打擊籠留到天黑：「今天想練到幾點，你自己說。」",k:[2,1,0],tag:"接觸與揮棒軌跡"},
+  {t:"重量訓練週",need:null,story:"體育室進了一批二手槓片。學長們起鬨：「來比深蹲啊。」",k:[3,0,0],tag:"下半身與核心"},
+  {t:"牛棚加投日",need:"P",story:"捕手學長蹲好了：「你今天的指叉有東西，要不要多抓幾顆？」",k:[0,1,2],tag:"變化球精度",arm:true},
+  {t:"外野長傳特訓",need:"B",story:"教練站在本壘板舉著手套：「從全壘打牆傳到我這，不落地。」",k:[2,0,1],tag:"肩力與傳準"},
+  {t:"錄影分析課",need:null,story:"小黑把筆電架在器材室，逐格播放你上一場的每一球。",k:[0,3,0],tag:"觀察與修正"},
+  {t:"跑壘地獄menu",need:null,story:"「本壘到二壘，計時。」教練按下碼錶的拇指看起來特別無情。",k:[0,0,3],tag:"腳程與判斷",inj:true},
+  {t:"千球守備",need:"B",story:"滾地球一顆接一顆，手套裡的掌心早就麻了。「還有三百顆。」",k:[0,1,2],tag:"守備範圍"},
+  {t:"球速測試日",need:"P",story:"測速槍架好了。全隊圍在牛棚後面等你的數字。",k:[3,0,0],tag:"極限出力",arm:true},
+  {t:"校刊專訪",need:null,story:"校刊社學妹拿著錄音筆：「請問……可以採訪王牌嗎？」",fame:true,tag:"知名度"},
+  {t:"營養師的菜單",need:null,story:"隔壁班家長是營養師，自願幫球隊調三週飲食。",hp:true,tag:"恢復與體質"},
+  {t:"學長的傳承",need:null,story:"引退的三年級學長把手套塞給你：「這招，只教你一個人。」",k:[1,1,1],tag:"綜合成長"},
+  {t:"深夜雞排的誘惑",need:null,story:"晚自習後，雞排攤的香味飄進宿舍窗戶。去，還是不去？",hp:true,junk:true,tag:"自制力測試"}
+];
+function hsCardSuccess(tier){
+  /* 保守 0.80／標準 0.60／梭哈 0.45；狀態與特性修正 */
+  let p=tier==="safe"?0.8:tier==="std"?0.6:0.45;
+  p+=(S.yaruki-2)*0.04;
+  if(S.traits.genius)p+=0.1;
+  if(S.traits.late)p+=0.05;
+  if(S.traits.clutch&&tier==="allin")p+=0.15; // 大心臟：豪賭不再折損
+  if(S.traits.distract)p-=0.08;
+  return Math.max(0.15,Math.min(0.95,p));
+}
+function hsEventCard(done){
+  const pool=HS_EVENT_CARDS.filter(c=>!c.need||(c.need==="P"?(S.pos==="P"||S.twoWay):(S.pos==="B"||S.twoWay)));
+  const c=pick(pool);
+  hr();head("突發事件卡・"+c.t,c.tag);
+  story(c.story);
+  const mul={safe:1,std:2,allin:3.5},fail={safe:0,std:1,allin:2};
+  const doTier=(tier)=>{
+    const ok=chance(hsCardSuccess(tier));
+    S.flags.cardAllIn=S.flags.cardAllIn||{w:0,f:0};
+    if(tier==="allin"){ if(ok){S.flags.cardAllIn.w++;}else{S.flags.cardAllIn.f++;S.flags.gambleFailures=(S.flags.gambleFailures||0)+1;} }
+    const m=Math.round(4*mul[tier]);
+    if(ok){
+      if(c.fame){ S.fame+=Math.round(2*mul[tier]); gain("採訪登上校刊頭版！知名度+"+Math.round(2*mul[tier])); }
+      else if(c.hp&&!c.junk){ S.hp=Math.min(S.maxHp,S.hp+8*mul[tier]); gain("身體像換了一顆引擎：體力+"+Math.round(8*mul[tier])); }
+      else if(c.junk){ S.hp=Math.min(S.maxHp,S.hp+6); yarukiUp(); gain(tier==="safe"?"忍住了。回宿舍拉筋，體力+6、狀態+1":"吃完立刻加跑三圈操場抵罪——體力+6、狀態+1，罪惡感歸零"); }
+      else{ const g=spGain(c.k[0]*mul[tier],c.k[1]*mul[tier],c.k[2]*mul[tier]); gain("特訓見效："+g); }
+      if(tier==="allin"){
+        extra("豪賭成功！");
+        if(c.arm&&S.pos!=="B")addArmLoad(20,"full",0.8);
+        if(S.flags.cardAllIn.w>=4&&S.flags.cardAllIn.f===0&&!S.flags.cardStreakRewarded){
+          S.flags.cardStreakRewarded=1;
+          extra("四次梭哈全中——你天生就該站在賭桌上");
+          const b=spGain(4,4,4);gain("腎上腺素的饋贈："+b);S.fame+=4;
+        }
+      }
+    }else{
+      if(tier==="safe"){ loss("收穫平平……但至少沒受傷。"); S.hp=Math.max(0,S.hp-4); }
+      else if(tier==="std"){ loss("練過頭了，隔天全身痠痛。體力-10、狀態-1"); S.hp=Math.max(0,S.hp-10); yarukiDn(); }
+      else{
+        loss("梭哈失敗——身體立刻還你顏色。體力-16、狀態-2"+(c.inj||c.arm?"、還掛了彩":""));
+        S.hp=Math.max(0,S.hp-16); yarukiDn(2);
+        if(c.arm&&S.pos!=="B"){ addArmLoad(45,"full",1); sys("手臂負荷大增——測速的代價。"); }
+        if(c.inj&&chance(0.35)&&!S.ailments.includes("腰痛")){ S.ailments.push("腰痛"); loss("跑壘時拉傷腰……【腰痛】纏身（練習效率下降）"); }
+      }
+    }
+    statusBar();next(null,done);
+  };
+  choices([
+    {label:"保守應對｜成功率高・小幅收穫",fn:()=>doTier("safe")},
+    {label:"照表操課｜標準風險・標準報酬",fn:()=>doTier("std")},
+    {label:"梭哈！｜成功率-15%・成敗都是大的",cls:"risk",fn:()=>doTier("allin")},
+  ],"事件卡三檔應對：狀態好壞會影響成功率；梭哈失敗會計入生涯豪賭紀錄（累積過多有負面特性風險）。");
+}
 function randomEvent(done){
   const evs=[
     ()=>{ ev("阿誠教練在朝會上被校長叫去談「棒球隊的存廢」，回來後練習菜單默默加倍。"); S.evCoach=Math.min(99,S.evCoach+2); const m=spGain(4,4,4); gain(m); },
