@@ -101,6 +101,8 @@ header .slogan{font-size:.68rem; color:var(--ink2); letter-spacing:3px; margin-t
 #choices button:hover{ transform:translate(1px,1px); box-shadow:1px 1px 0 rgba(0,0,0,.25); background:#fff; }
 #choices button.primary{ border-width:2px; }
 #choices button.small{font-size:.76rem; padding:5px 9px; opacity:.85; font-weight:400;}
+#choices button.can{border-color:#3c5a2a; color:#2c4a1e; background:#eef4e4; box-shadow:2px 2px 0 rgba(60,90,42,.4);}
+#choices button.cant{opacity:.4;}
 #choices button:disabled{opacity:.35; cursor:default;}
 /* 數據專欄框 */
 .statgrid{
@@ -206,7 +208,7 @@ function newState(seed, name, pos){
     items:[], flags:{},
     honors:[],                            // 頭銜/事蹟
     hsRecord:{w:0,l:0},
-    stats:{ab:0,h:0,hr:0,rbi:0, so:0,er:0,w:0,l:0, outsRec:0}, // 互動比賽通算
+    stats:{ab:0,h:0,hr:0,rbi:0,bb:0,dbl:0, so:0,er:0,w:0,l:0, outsRec:0,ha:0,wa:0}, // 重點比賽通算
     /* 職業期 */
     league:null,                          // "CPBL"|"NPB"|"MLB"|"MiLB"|"UNI"|"AMA"
     team:null, level:null,                // level: 二軍/一軍/A/AA/AAA/MLB
@@ -255,6 +257,7 @@ function choices(list, hint){
     b.textContent=it.label;
     if(it.primary) b.className="primary";
     if(it.small) b.className="small";
+    if(it.cls) b.className=(b.className?b.className+" ":"")+it.cls;
     b.onclick=()=>{
       c.innerHTML="";
       if(!it.noEcho) sys("▶ "+it.label);
@@ -368,6 +371,52 @@ function fmtMoney(w){ // 萬台幣
   return w+"萬";
 }
 
+/* ---- 個人資料頁 ---- */
+function showProfile(back){
+  hr(); head("選手個人資料", S.name+"（"+(S.pos==="P"?"投手":"野手")+"・"+handLabel()+"）　"+S.age+"歲");
+  let where = S.phase==="hs"? SCHOOL+"棒球隊" : S.phase==="uni"? (S.uniName||"大學") : S.phase==="ama"? "社會人球隊" : (S.team||"")+(S.level?("・"+S.level):"");
+  let info = "所屬："+where;
+  if(S.gf) info += "　♥ "+GF[S.gf].name+(S.married?"（已婚）":"（交往中）");
+  if(S.phase!=="hs") info += "　年薪"+fmtMoney(S.salary)+"　生涯收入"+fmtMoney(S.earnings);
+  sys(info);
+  // 能力
+  let card;
+  if(S.pos==="P"){
+    card='<div class="statgrid">'
+      +'<div class="cell">球速 <b>'+S.velo+' km/h</b></div>'
+      +'<div class="cell">控球 '+rk(rankPow(S.ctrl))+' <b>'+S.ctrl+'</b></div>'
+      +'<div class="cell">耐力 '+rk(rankPow(S.stam))+' <b>'+S.stam+'</b></div>'
+      +'<div class="cell">變化球 <b>'+(Object.entries(S.breaks).map(([k,v])=>k+" Lv"+v).join("、")||"無")+'</b></div></div>';
+  }else{
+    card='<div class="statgrid">'
+      +'<div class="cell">彈道 <b>'+S.traj+'</b></div><div class="cell">接觸 '+rk(rankOf(S.meet))+' <b>'+S.meet+'</b></div>'
+      +'<div class="cell">力量 '+rk(rankPow(S.power))+' <b>'+S.power+'</b></div><div class="cell">跑力 '+rk(rankOf(S.run))+' <b>'+S.run+'</b></div>'
+      +'<div class="cell">肩力 '+rk(rankOf(S.arm))+' <b>'+S.arm+'</b></div><div class="cell">守備 '+rk(rankOf(S.fld))+' <b>'+S.fld+'</b></div></div>';
+  }
+  out(card,"story");
+  out("【特性】"+esc(S.abil.join("、")||"（尚無）")+(S.ailments.length?("　【異常】"+esc(S.ailments.join("、"))):"")+(S.items.length?("　【裝備】"+esc(S.items.join("、"))):""),"story");
+  // 成績
+  const st=S.stats;
+  let rows='<table class="career"><tr><th>範圍</th><th>成績</th></tr>';
+  const batLine=(o)=>{ const avg=o.ab?(o.h/o.ab).toFixed(3):"—"; return o.ab+"打數 "+o.h+"安("+(o.dbl||0)+"二安/"+o.hr+"轟) "+o.rbi+"打點 "+(o.bb||0)+"保送 打率"+avg; };
+  const pitLine=(o)=>{ const ip=Math.floor((o.outsRec||o.outs||0)/3), ipo=(o.outsRec||o.outs||0)%3; const era=(ip||ipo)?((o.er*9)/(ip+ipo/3)).toFixed(2):"—"; return (o.w!==undefined?(o.w+"勝"+o.l+"敗 "):"")+ip+"."+ipo+"局 "+o.so+"K 失"+o.er+" 防禦率"+era; };
+  if(S.phase==="pro"&&S.sea){
+    const s2=S.sea;
+    rows+='<tr><td>本季</td><td>'+esc(S.pos==="B"?(s2.ab+"打數 "+s2.h+"安("+s2.hr+"轟) "+s2.rbi+"打點 打率"+(s2.ab?(s2.h/s2.ab).toFixed(3):"—")):(s2.w+"勝"+s2.l+"敗 投"+s2.ip+"局 "+s2.so+"K 失"+s2.er))+'</td></tr>';
+  }
+  rows+='<tr><td>重點賽事通算</td><td>'+esc(S.pos==="B"?batLine(st):pitLine(st))+'</td></tr>';
+  rows+='</table>';
+  out("【成績】"+rows,"story");
+  if(S.proYears.length){
+    let tb='<table class="career"><tr><th>年度</th><th>年齡</th><th>球隊</th><th>成績</th></tr>';
+    S.proYears.forEach(y=>{ tb+='<tr><td>'+y.year+'</td><td>'+y.age+'</td><td>'+esc(y.team)+'</td><td>'+esc(y.line)+'</td></tr>'; });
+    tb+='</table>';
+    out("【職業年表】"+tb,"story");
+  }
+  if(S.honors.length) out("【榮譽】"+esc(S.honors.join("、")),"story");
+  next("↩ 返回", back);
+}
+
 /* ---- 存檔碼 ---- */
 function saveCode(){
   return btoa(unescape(encodeURIComponent(JSON.stringify(S))));
@@ -438,6 +487,29 @@ function endTurn(){
 }
 function summerCamp(){
   S.age++;
+  /* 學年回顧報 */
+  hr();
+  let rv='<table class="career"><tr><th colspan="2">學年回顧特輯</th></tr>';
+  rv+='<tr><td>球隊戰績</td><td>'+S.hsRecord.w+'勝'+S.hsRecord.l+'敗（累計）</td></tr>';
+  rv+='<tr><td>個人（重點賽事）</td><td>'+esc(S.pos==="B"?(S.stats.ab+"打數"+S.stats.h+"安 "+S.stats.hr+"轟 打率"+(S.stats.ab?(S.stats.h/S.stats.ab).toFixed(3):"—")):(S.stats.so+"K 失"+S.stats.er)) +'</td></tr>';
+  rv+='<tr><td>知名度／球探</td><td>知名度'+S.fame+'　中職'+S.scout.cpbl+'／日職'+S.scout.npb+'／美職'+S.scout.mlb+'</td></tr>';
+  if(S.honors.length) rv+='<tr><td>榮譽</td><td>'+esc(S.honors.join("、"))+'</td></tr>';
+  rv+='</table>';
+  out("【學年回顧】"+rv,"story");
+  /* 教練課題結算 */
+  if(S.hsGoal){
+    const gained = overall()-S.hsGoal.base;
+    if(gained>=S.hsGoal.target){
+      extra("教練課題達成！（戰力+"+gained+"）");
+      talk("阿誠教練","……有練。下一年的課題，會更重。");
+      const m=spGain(12,12,12); S.evCoach=Math.min(99,S.evCoach+8);
+      gain(m+"　教練評價+8");
+    }else{
+      talk("阿誠教練","課題沒過（戰力+"+gained+"／目標+"+S.hsGoal.target+"）。……暑假給我加倍練回來。");
+    }
+    S.hsGoal={base:overall(), target:14};
+    sys("📋 新年度課題：「綜合戰力再提升"+S.hsGoal.target+"以上」");
+  }
   hr(); head("盛夏集訓特輯", SCHOOL+"棒球隊・移地訓練");
   story("整個暑假在南部的移地集訓中度過。烈日、紅土、曬脫一層皮——身體紮紮實實地變強了。");
   const m=spGain(ri(18,26),ri(14,22),ri(12,20));
@@ -471,6 +543,7 @@ function actionMenu(){
   list.push({label:"出去晃晃", fn:urotsukiMenu});
   list.push({label:"聯絡・約會", fn:phoneMenu});
   list.push({label:"能力強化", fn:()=>allocMenu(actionMenu)});
+  list.push({label:"個人資料", fn:()=>showProfile(actionMenu), small:true});
   list.push({label:"存檔", fn:saveMenu, small:true});
   choices(list, "體力 "+S.hp+"/"+S.maxHp+"　狀態："+moodName(S.yaruki)+"　學業："+S.study+(S.ailments.length?"　異常："+S.ailments.join("、"):""));
 }
@@ -571,7 +644,8 @@ function allocMenu(back){
   const c=(n)=>Math.ceil(n*sense);
   const list=[];
   const buy=(label,txt,can,apply)=>{
-    list.push({label:label+"（"+txt+"）", fn:()=>{
+    const ok=can();
+    list.push({label:label+"（"+txt+"）", cls: ok?"can":"cant", fn:()=>{
       if(!can()){ sys("點數不足或已達上限。"); allocMenu(back); return; }
       apply(); statusBar(); gain(label+" 完成！");
       allocMenu(back);
@@ -649,7 +723,7 @@ function myBatSide(foeHand){
 /* ---- 比賽入口（story/career 介面不變） ---- */
 function startMatch(cfg){
   M={cfg:cfg, foeProfile:genFoeProfile(cfg.foeStr), scoreUs:0, scoreThem:0,
-     myGame:{ab:0,h:0,hr:0,rbi:0, so:0,er:0,outs:0}, done:false};
+     myGame:{pa:0,ab:0,h:0,dbl:0,hr:0,rbi:0,bb:0,so:0, er:0,outs:0,ha:0,wa:0,np:0}, done:false};
   const fp=M.foeProfile;
   hr(); head("比賽　"+cfg.name, "對戰："+cfg.foe+"　"+HOMENAME+"後攻");
   const side=myBatSide(fp.hand);
@@ -693,6 +767,7 @@ function theirHalf(inn, foeStr){
     let outs=0, on1=false, lines=[], batterIdx=0;
     while(outs<3 && runs<6){
       batterIdx++;
+      M.myGame.np += ri(3,6);
       const bHandR=rnd();
       const bHand = bHandR<0.55?"R": bHandR<0.9?"L":(S.throwHand==="L"?"R":"L");
       const same = bHand===S.throwHand;
@@ -704,6 +779,7 @@ function theirHalf(inn, foeStr){
       if(hasT("釋球○")) pK+=0.02;
       if(hasT("內角職人")||hasT("外角職人")) pK+=0.02;
       if(on1&&hasT("危機○")) pK+=0.05;
+      if(S.flags.battery) pK+=0.02;   // 羈絆：黃金電池（阿海）
       const pBB = Math.max(0.03, 0.12 - ctrlV*0.10 + (tired?0.05:0));
       const pHitA = Math.max(0.08, 0.24 - stuff*0.18 + foeStr*0.014 - ctrlV*0.05 + (tired?0.06:0));
       const r=rnd();
@@ -716,10 +792,12 @@ function theirHalf(inn, foeStr){
         if(S.throwHand==="L"&&bHand==="L") S.flags.tKL=(S.flags.tKL||0)+1;
         if(chance(0.4)) lines.push("K！"+handTxt(bHand)+"打者遭"+flavor+"。");
       }else if(r<pK+pBB){
+        M.myGame.wa++; S.stats.wa=(S.stats.wa||0)+1;
         if(on1&&chance(0.25)){ runs++; M.myGame.er++; S.stats.er++; lines.push("保送擠壘失分…"); }
         else lines.push("投出四壞。");
         on1=true;
       }else if(r<pK+pBB+pHitA){
+        M.myGame.ha++; S.stats.ha=(S.stats.ha||0)+1;
         const hardP = 0.16 + foeStr*0.015 - stuff*0.12 + (same?0:0.04) - (hasT("低球○")?0.03:0);
         if(chance(hardP*0.35)){
           const rr=1+(on1?1:0); runs+=rr; on1=false;
@@ -782,7 +860,7 @@ function myPlateAppearance(inn, foeStr, addP){
   const side=myBatSide(fp.hand);
   const adv = side!==fp.hand;
   const mm=moodMod();
-  M.myGame.ab++; S.stats.ab++;
+  M.myGame.pa++;
   let pHit = 0.16 + S.meet*0.016 + S.power*0.0004 + (adv?0.045:-0.045) + (mm-1)*0.15;
   if(fp.hand==="L"&&hasT("左投剋星")) pHit+=0.05;
   if(hasT("機會○")&&chance(0.5)) pHit+=0.03;
@@ -794,15 +872,17 @@ function myPlateAppearance(inn, foeStr, addP){
   if(chance(Math.max(0.03,(0.09-foeStr*0.005))*(nPitch/4))){ pHit+=0.15; } // 磨出失投甜球
   const r=rnd();
   if(r<pK){
-    M.myGame.so++;
+    M.myGame.so++; M.myGame.ab++; S.stats.ab++;
     gameLine("　(打) 你的打席：遭到三振……"+(adv?"":"（同側投手的變化球太刁）"),"B");
     return 0;
   }
   if(r<pK+pBB){
     S.flags.tRead=(S.flags.tRead||0)+1;
+    M.myGame.bb++; S.stats.bb=(S.stats.bb||0)+1;
     gameLine("　(打) 你的打席：沉住氣選到四壞保送。","B");
     return chance(0.2)?1:0;
   }
+  M.myGame.ab++; S.stats.ab++;
   if(r<pK+pBB+Math.max(0.1,pHit)){
     M.myGame.h++; S.stats.h++;
     if(fp.hand==="L") S.flags.tVsL=(S.flags.tVsL||0)+1;
@@ -822,6 +902,7 @@ function myPlateAppearance(inn, foeStr, addP){
       return rbi;
     }
     const dbl=chance(0.22+S.run*0.012);
+    if(dbl){ M.myGame.dbl++; S.stats.dbl=(S.stats.dbl||0)+1; }
     const rbi=chance(0.35)?1:0;
     M.myGame.rbi+=rbi; S.stats.rbi+=rbi;
     gameLine("　(打) 🟢 你的打席："+dirW+"，"+(dbl?"二壘安打！":"安打上壘！")+(rbi?"帶有打點！":""),"B");
@@ -844,12 +925,26 @@ function finishMatch(){
   const win=M.scoreUs>M.scoreThem, draw=M.scoreUs===M.scoreThem;
   head("賽末快報", HOMENAME+" "+M.scoreUs+" : "+M.scoreThem+" "+M.cfg.foe+"　──"+(win?"勝利！":draw?"平手":"敗戰"));
   const g=M.myGame;
+  const st=S.stats;
+  let box='<table class="career">';
   if(S.pos==="P"){
-    story("你的成績：投球 "+Math.floor(g.outs/3)+"."+(g.outs%3)+" 局、三振 "+g.so+"、失分 "+g.er+"。");
     if(win){ S.stats.w++; } else if(!draw){ S.stats.l++; }
+    const ip=Math.floor(g.outs/3)+"."+(g.outs%3);
+    const gera=g.outs? ((g.er*9)/(g.outs/3)).toFixed(2):"—";
+    const tIP=Math.floor(st.outsRec/3), tIPo=st.outsRec%3;
+    const tera=st.outsRec? ((st.er*9)/(st.outsRec/3)).toFixed(2):"—";
+    box+='<tr><th></th><th>局數</th><th>被安打</th><th>保送</th><th>三振</th><th>失分</th><th>用球數</th><th>防禦率</th></tr>'
+       +'<tr><td>本場</td><td>'+ip+'</td><td>'+g.ha+'</td><td>'+g.wa+'</td><td>'+g.so+'</td><td>'+g.er+'</td><td>'+g.np+'</td><td>'+gera+'</td></tr>'
+       +'<tr><td>重點賽通算</td><td>'+tIP+'.'+tIPo+'</td><td>'+(st.ha||0)+'</td><td>'+(st.wa||0)+'</td><td>'+st.so+'</td><td>'+st.er+'</td><td>—</td><td>'+tera+'</td></tr>';
   }else{
-    story("你的成績："+g.ab+" 打數 "+g.h+" 安打"+(g.hr?"（含"+g.hr+"轟）":"")+"、打點 "+g.rbi+"。");
+    const avg=g.ab?(g.h/g.ab).toFixed(3):"—";
+    const tavg=st.ab?(st.h/st.ab).toFixed(3):"—";
+    box+='<tr><th></th><th>打席</th><th>打數</th><th>安打</th><th>二安</th><th>全壘打</th><th>打點</th><th>保送</th><th>三振</th><th>打率</th></tr>'
+       +'<tr><td>本場</td><td>'+g.pa+'</td><td>'+g.ab+'</td><td>'+g.h+'</td><td>'+g.dbl+'</td><td>'+g.hr+'</td><td>'+g.rbi+'</td><td>'+g.bb+'</td><td>'+g.so+'</td><td>'+avg+'</td></tr>'
+       +'<tr><td>重點賽通算</td><td>—</td><td>'+st.ab+'</td><td>'+st.h+'</td><td>'+(st.dbl||0)+'</td><td>'+st.hr+'</td><td>'+st.rbi+'</td><td>'+(st.bb||0)+'</td><td>'+st.so+'</td><td>'+tavg+'</td></tr>';
   }
+  box+='</table>';
+  out("【個人成績單】"+box,"story");
   traitProgress();
   if(win){
     gain("勝利！教練評價+5、知名度+2");
@@ -1208,6 +1303,8 @@ function opening(){
     talk("阿誠教練","校長說，今年再打不出成績，棒球隊就裁掉，操場改停車場。──想留下來，就用比賽證明。");
     talk("泰雅隊長","（三年級的巨漢學長咧嘴一笑）歡迎加入沉船啦，學弟。不過我們打算讓它浮起來。");
     ev("目標：三年內用成績保住球隊、打出名號──畢業時，選擇你的路：大學、中職、日職，或美職。");
+    S.hsGoal={base:overall(), target:14};
+    sys("📋 阿誠教練的年度課題：「一年內，綜合戰力給我提升"+S.hsGoal.target+"以上。」（學年結束結算，達成有大獎勵）");
     sys("【玩法】每週一行動。練習得點數→「能力強化」；「讀書」影響學測與大學；比賽表現累積三路球探註記（中職/日職/美職）。黑豹旗在秋天、木棒聯賽在春天。");
     next("開始高中生活", runTurn);
   });
@@ -1219,7 +1316,7 @@ on(1,10,3,function(){
   story("黑豹旗——全台灣所有高中都能報名的大賽。海線高中三年來首次出賽，全校卻沒幾個人知道。");
   talk("阿誠教練","對手是市區的私立學校。輸了就回家，跟人生一樣。");
   setLineup(["1棒 二壘 阿吉","2棒 中外野 小胖","3棒 一壘 廖大","4棒(你)","5棒 三壘 泰雅","6棒 捕手 阿海","7棒 右外野 阿明","8棒 游擊 小黑","9棒 左外野 阿樂"],"海線");
-  startMatch({name:"黑豹旗首輪", foe:"市立志成高中", foeStr:4, innings:4, onEnd:(win)=>{
+  startMatch({name:"黑豹旗首輪", foe:"市立大理高中", foeStr:4, innings:4, onEnd:(win)=>{
     if(win){
       extra("海線高中黑豹旗首勝！三年來第一場勝利");
       S.hsRecord.w++; S.fame+=5; S.scout.cpbl+=3;
@@ -1256,7 +1353,7 @@ on(1,11,1,function(){
 });
 on(1,3,2,function(){
   head("木棒聯賽預賽", "高中棒球聯賽・分區預賽");
-  startMatch({name:"木棒聯賽預賽", foe:"縣立東港水產", foeStr:5, innings:4, onEnd:(win)=>{
+  startMatch({name:"木棒聯賽預賽", foe:"興大附農", foeStr:5, innings:4, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=4; S.scout.cpbl+=3; story("分區突圍！雖然止步於複賽門檻，海線的名字開始出現在地方版。"); }
     else { S.hsRecord.l++; story("預賽出局……阿誠教練在球場邊坐了很久。"); }
     next(null, endTurn);
@@ -1287,7 +1384,7 @@ on(2,9,1,function(){
 });
 on(2,10,3,function(){
   head("黑豹旗（二年級）", "首輪");
-  startMatch({name:"黑豹旗首輪", foe:"私立青雲中學", foeStr:5, innings:4, onEnd:(win)=>{
+  startMatch({name:"黑豹旗首輪", foe:"普門中學", foeStr:5, innings:4, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=5; S.flags.kuroji2=1; sys("晉級！下一輪又是……北都工商。"); }
     else { S.hsRecord.l++; }
     next(null, endTurn);
@@ -1313,7 +1410,7 @@ on(2,11,1,function(){
 });
 on(2,3,2,function(){
   head("木棒聯賽複賽", "高中棒球聯賽");
-  startMatch({name:"木棒聯賽複賽", foe:"國立嘉農農工", foeStr:6, innings:4, onEnd:(win)=>{
+  startMatch({name:"木棒聯賽複賽", foe:"三民高中", foeStr:6, innings:4, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=6; S.scout.cpbl+=4; S.honors.push("木棒聯賽複賽晉級"); }
     else S.hsRecord.l++;
     next(null, endTurn);
@@ -1346,7 +1443,7 @@ on(3,9,1,function(){
 });
 on(3,10,3,function(){
   head("黑豹旗（最終年）", "首輪");
-  startMatch({name:"黑豹旗首輪", foe:"市立大安高工", foeStr:6, innings:4, onEnd:(win)=>{
+  startMatch({name:"黑豹旗首輪", foe:"成德高中", foeStr:6, innings:4, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.flags.k3a=1; }
     else { S.hsRecord.l++; story("最後的黑豹旗，一輪告終……更衣室裡誰都沒說話。"); }
     next(null, endTurn);
@@ -1373,7 +1470,7 @@ on(3,11,3,function(){
   if(!S.flags.k3b){ actionMenu(); return; }
   head("黑豹旗冠軍戰", "海線高中，站上決勝舞台");
   story("十五年了。海線高中重新站上全國決賽。鎮上包了六台遊覽車北上，阿桃早點今天公休。");
-  startMatch({name:"黑豹旗冠軍戰", foe:"私立榮工中學", foeStr:9, innings:6, onEnd:(win)=>{
+  startMatch({name:"黑豹旗冠軍戰", foe:"平鎮高中", foeStr:9, innings:6, onEnd:(win)=>{
     if(win){
       extra("全國制霸！海線高中黑豹旗冠軍！！");
       S.hsRecord.w++; S.fame+=40; S.scout.cpbl+=15; S.scout.npb+=12; S.scout.mlb+=12;
@@ -1397,7 +1494,7 @@ on(3,1,2,function(){
 });
 on(3,3,2,function(){
   head("木棒聯賽（最終年）", "決賽圈");
-  startMatch({name:"木棒聯賽決賽圈", foe:"國立南英商工", foeStr:8, innings:4, onEnd:(win)=>{
+  startMatch({name:"木棒聯賽決賽圈", foe:"穀保家商", foeStr:8, innings:4, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=10; S.scout.cpbl+=6; S.honors.push("木棒聯賽決賽圈勝利"); }
     else S.hsRecord.l++;
     next(null, endTurn);
@@ -1425,6 +1522,32 @@ on(3,5,2,function(){
   }
 });
 
+on(3,6,1,function(){
+  if(!S.honors.includes("U18國手")){ actionMenu(); return; }
+  head("U18世界盃", "中華隊 vs 世界──畢業前的最終舞台");
+  extra("U18世界盃開打！"+S.name+"披上中華隊戰袍");
+  story("國際賽的燈光和高中球場完全不同。轉播車、各國球探、滿場國旗——這裡的每一球都被全世界看著。");
+  startMatch({name:"U18世界盃預賽", foe:"韓國U18", foeStr:8, innings:4, onEnd:(win1)=>{
+    if(win1){ S.fame+=10; S.scout.cpbl+=5; S.scout.npb+=5; S.scout.mlb+=5; gain("擊敗韓國！三路球探註記+5"); }
+    else { S.fame+=4; }
+    story("下一戰——日本U18。先發投手的名字你再熟悉不過：北都工商・何俊毅（以交流選手身分入選日本隊競演賽）……不，他是中華隊的隊友！這次，你們併肩作戰，對面是真正的日本高校精英。");
+    next("對日本之戰", ()=>{
+      startMatch({name:"U18世界盃・對日本", foe:"日本U18", foeStr:9, innings:6, onEnd:(win2)=>{
+        if(win2){
+          extra("U18世界盃擊敗日本！台灣青棒的驕傲");
+          S.honors.push("U18世界盃擊敗日本"); S.fame+=20;
+          S.scout.cpbl+=8; S.scout.npb+=10; S.scout.mlb+=10;
+          talk("何俊毅","（擊掌）……跟你同隊，感覺真怪。但很強。");
+        }else{
+          story("惜敗日本。但你在國際舞台的每個鏡頭，都已存進各國球探的資料庫。");
+          S.fame+=8; S.scout.npb+=5; S.scout.mlb+=5;
+        }
+        next(null, endTurn);
+      }});
+    });
+  }});
+});
+
 /* ================= 畢業分歧 ================= */
 function graduationPhase(){
   S.phase="grad";
@@ -1432,6 +1555,15 @@ function graduationPhase(){
   head("鳳凰花開", "畢業典禮・"+SCHOOL);
   story("畢業歌唱完，阿誠教練在球員休息區等你，桌上放著幾份文件——你的未來。");
   const ov=overall();
+  if(S.hsGoal){
+    if(ov-S.hsGoal.base>=S.hsGoal.target){
+      extra("教練課題三年皆達成的男人");
+      talk("阿誠教練","……我沒什麼好教你的了。去吧。");
+      S.scout.cpbl+=4; S.scout.npb+=3; S.scout.mlb+=3;
+      gain("最終課題達成！三路球探註記+");
+    }
+    S.hsGoal=null;
+  }
   sys("綜合戰力："+ov+"　球探註記──中職："+S.scout.cpbl+"　日職："+S.scout.npb+"　美職："+S.scout.mlb+"　學測："+({high:"優",mid:"中",low:"待加強"}[S.flags.exam]||"—"));
   const list=[];
   const canCPBL = ov>=42 || S.scout.cpbl>=20;
@@ -1451,9 +1583,9 @@ function graduationPhase(){
    每場比賽＝一個決策（全力/一般/養生）＋重要度（★～★★★）；
    關鍵戰役以自動戰報引擎呈現。大學/社會人路線亦在此。 */
 
-const CPBL_TEAMS=["台北雷虎","高雄海鯨","桃園飛牛","台中太陽","台南鯤鯓","新竹風獅"];
-const NPB_TEAMS=["東京巨星","大阪浪虎","福岡海鷹","北海道棕熊"];
-const MLB_TEAMS=["洛杉磯星辰","紐約帝國","西雅圖水手座","德州遊騎士團"];
+const CPBL_TEAMS=["中信兄弟","統一獅","樂天桃猿","富邦悍將","味全龍","台鋼雄鷹"];
+const NPB_TEAMS=["讀賣巨人","阪神虎","軟銀鷹","日本火腿鬥士","橫濱DeNA","歐力士猛牛","廣島鯉魚","羅德海洋","養樂多燕子","樂天金鷲","中日龍","西武獅"];
+const MLB_TEAMS=["洛杉磯道奇","紐約洋基","西雅圖水手","德州遊騎兵","聖地牙哥教士","波士頓紅襪","芝加哥小熊","舊金山巨人"];
 
 /* ---- 簽約/選秀 ---- */
 function draftCPBL(fromUni){
@@ -1468,7 +1600,7 @@ function draftCPBL(fromUni){
   const team=pick(CPBL_TEAMS);
   extra(team+" 在"+round+"指名："+S.name+"！");
   story("簽約金談定，你套上職業球衣，鎂光燈閃成一片。"+(S.gf? GF[S.gf].name+"在台下拍到手機沒電。":""));
-  if(S.flags.rivalGone!==1){ sys("同梯新聞：北都工商・何俊毅以破格條件旅日，加盟大阪浪虎。──宿敵的舞台，在海的另一邊。"); S.flags.rivalGone=1; S.flags.rivalNPB=1; }
+  if(S.flags.rivalGone!==1){ sys("同梯新聞：北都工商・何俊毅以破格條件旅日，加盟阪神虎。──宿敵的舞台，在海的另一邊。"); S.flags.rivalGone=1; S.flags.rivalNPB=1; }
   proInit("CPBL", team, score>=75?"一軍":"二軍", salary);
 }
 function signNPB(fromUni){
@@ -1478,7 +1610,7 @@ function signNPB(fromUni){
   const salary = score>=95? 1400 : score>=75? 900 : 500;
   extra(team+" 正式簽下台灣新星 "+S.name);
   story("羽田機場的鎂光燈、聽不懂的問題、翻譯遞來的名片……新的戰場，語言先於球速。");
-  if(S.flags.rivalGone!==1){ S.flags.rivalGone=1; S.flags.rivalNPB=1; sys("有趣的是──何俊毅也在日職。大阪浪虎。同一個聯盟，宿命繼續。"); }
+  if(S.flags.rivalGone!==1){ S.flags.rivalGone=1; S.flags.rivalNPB=1; sys("有趣的是──何俊毅也在日職。阪神虎。同一個聯盟，宿命繼續。"); }
   proInit("NPB", team, score>=90?"一軍":"二軍", salary);
 }
 function signMLB(fromUni){
@@ -1529,7 +1661,7 @@ function uniYear(){
     const key = (S.uniYear===2||S.uniYear===4);
     if(key){
       head("大專聯賽關鍵戰", "公開一級・對台體大");
-      startMatch({name:"大專聯賽", foe:"台灣體大", foeStr:6+S.uniYear, innings:4, onEnd:(win)=>{
+      startMatch({name:"大專聯賽", foe:"國立臺灣體大", foeStr:6+S.uniYear, innings:4, onEnd:(win)=>{
         if(win){ S.fame+=8; S.scout.cpbl+=6; S.scout.npb+=3; S.scout.mlb+=3; S.honors.push("大專聯賽勝利(大"+S.uniYear+")"); }
         else { S.scout.cpbl+=2; }
         afterUniYear();
@@ -1542,9 +1674,28 @@ function uniYear(){
     }
   }
   function afterUniYear(){
-    if(S.uniYear===3 && S.fame>=30 && overall()>=50){
-      ev("入選大學國家隊（世大運/亞錦）！國際賽經驗值千金。");
-      S.honors.push("大學國手"); S.fame+=10; S.scout.npb+=6; S.scout.mlb+=6;
+    if(S.uniYear===3 && S.fame>=30 && overall()>=50 && !S.flags.uniIntl){
+      S.flags.uniIntl=1;
+      ev("入選大學國家隊（世大運）！");
+      startMatch({name:"世大運", foe:"日本大學代表", foeStr:8, innings:4, onEnd:(win)=>{
+        if(win){ S.honors.push("世大運擊敗日本"); S.fame+=14; S.scout.npb+=8; S.scout.mlb+=8; gain("國際賽立功！日美球探大加"); }
+        else { S.honors.push("大學國手"); S.fame+=8; S.scout.npb+=4; S.scout.mlb+=4; }
+        afterUniYear2();
+      }});
+      return;
+    }
+    afterUniYear2();
+  }
+  function afterUniYear2(){
+    if(S.gf){
+      const uniGfScenes=[
+        GF[S.gf].name+"搭車來看你的大專聯賽，賽後兩人在校門口吃了熱炒。",
+        "期中考週，"+GF[S.gf].name+"陪你在圖書館K書到閉館——像回到高中。",
+        GF[S.gf].name+"傳來訊息：「職業的夢，我們一起追。」",
+        "你的生日，"+GF[S.gf].name+"訂了蛋糕帶到宿舍，整層樓的隊友都來分。",
+      ];
+      ev(uniGfScenes[Math.min(S.uniYear-1,3)]);
+      S.love[S.gf]=(S.love[S.gf]||0)+3; yarukiUp();
     }
     next("能力強化與升級", ()=>allocMenu(()=>{ statusBar(); next("下一年", careerLoop); }));
   }
@@ -1637,10 +1788,47 @@ function seasonStart(){
   monthStep();
 }
 const SEASON_MONTHS=[4,5,6,7,8,9,10];
+function assignGoal(){
+  const s=S.sea;
+  const base={h:s.h,ab:s.ab,hr:s.hr,so:s.so,er:s.er,ip:s.ip,tw:s.tw};
+  const pool = S.pos==="B" ? [
+    {txt:"本月打擊率 3成以上", chk:(d)=>d.ab>=8 && d.h/d.ab>=0.3},
+    {txt:"本月敲出 2支全壘打", chk:(d)=>d.hr>=2},
+    {txt:"本月安打 10支以上", chk:(d)=>d.h>=10},
+  ] : [
+    {txt:"本月三振 18次以上", chk:(d)=>d.so>=18},
+    {txt:"本月防禦率 3.50 以下", chk:(d)=>d.ip>=10 && (d.er*9/d.ip)<=3.5},
+    {txt:"本月投滿 20局", chk:(d)=>d.ip>=20},
+  ];
+  const g=pick(pool);
+  S.goal={txt:g.txt, chkIdx:pool.indexOf(g), base:base};
+}
+function evalGoal(){
+  if(!S.goal) return;
+  const s=S.sea, b=S.goal.base;
+  const d={h:s.h-b.h, ab:s.ab-b.ab, hr:s.hr-b.hr, so:s.so-b.so, er:s.er-b.er, ip:s.ip-b.ip, tw:s.tw-b.tw};
+  const pool = S.pos==="B" ? [
+    (x)=>x.ab>=8 && x.h/x.ab>=0.3, (x)=>x.hr>=2, (x)=>x.h>=10,
+  ] : [
+    (x)=>x.so>=18, (x)=>x.ip>=10 && (x.er*9/x.ip)<=3.5, (x)=>x.ip>=20,
+  ];
+  const ok = pool[S.goal.chkIdx](d);
+  if(ok){
+    const m=spGain(8,8,8);
+    S.fame=Math.min(999,S.fame+3);
+    extra("教練課題達成：「"+S.goal.txt+"」");
+    gain("獎勵："+m+"　知名度+3");
+  }else{
+    sys("（教練課題「"+S.goal.txt+"」未達成……下個月再來。）");
+  }
+  S.goal=null;
+}
 function monthStep(){
   const s=S.sea;
+  evalGoal();
   if(s.i>=s.total){ seasonEnd(); return; }
   s.mi++;
+  assignGoal();
   const monthGames=Math.min(Math.ceil(s.total/SEASON_MONTHS.length), s.total-s.i);
   s.nextPause=s.i+monthGames;
   const mLabel=(SEASON_MONTHS[Math.min(s.mi-1,SEASON_MONTHS.length-1)])+"月";
@@ -1648,6 +1836,7 @@ function monthStep(){
 }
 function proMonthAction(mLabel, monthGames){
   hr(); head(S.year+"年"+mLabel, S.team+"（"+S.level+"）　本月賽程"+monthGames+"場　疲勞"+Math.round(S.fatigue));
+  if(S.goal) sys("📋 教練課題：「"+S.goal.txt+"」（達成獎勵：點數＋知名度）");
   const list=[];
   if(S.pos==="B"){
     list.push({label:"特打加練", fn:()=>act(()=>{ const m=spGain(6,8,4); S.fatigue=Math.min(100,S.fatigue+6); gain(m+"（疲勞+6）"); })});
@@ -1655,12 +1844,13 @@ function proMonthAction(mLabel, monthGames){
     list.push({label:"牛棚加投", fn:()=>act(()=>{ const m=spGain(5,8,5); S.fatigue=Math.min(100,S.fatigue+6); gain(m+"（疲勞+6）"); })});
   }
   list.push({label:"重量訓練", fn:()=>act(()=>{ const m=spGain(10,0,3); S.fatigue=Math.min(100,S.fatigue+5); gain(m+"（疲勞+5）"); })});
-  list.push({label:"影片研究對手", fn:()=>act(()=>{ S.sea.monthPerf=0.06; S.expG+=6; gain("技術+6　本月比賽表現+（研究奏效）"); })});
+  list.push({label:"影片研究對手"+(S.flags.analyst?"（小黑加成）":""), fn:()=>act(()=>{ S.sea.monthPerf=S.flags.analyst?0.09:0.06; S.expG+=6; gain("技術+6　本月比賽表現+"+(S.flags.analyst?"+（小黑的逐格分析！）":"（研究奏效）")); })});
   list.push({label:"徹底保養", fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); gain("疲勞-22、體力+20"); })});
   if(S.gf||S.married){
     list.push({label:S.married?"陪伴家人":"與"+GF[S.gf].name+"約會", fn:()=>act(()=>{ yarukiUp(2); S.fatigue=Math.max(0,S.fatigue-12); gain("狀態+2、疲勞-12（心的充電）"); })});
   }
   list.push({label:"能力強化", fn:()=>allocMenu(()=>proMonthAction(mLabel,monthGames))});
+  list.push({label:"個人資料", fn:()=>showProfile(()=>proMonthAction(mLabel,monthGames)), small:true});
   list.push({label:"存檔", fn:saveMenu, small:true});
   choices(list,"本月的自由時間要怎麼用？（點數可到「能力強化」升能力）");
   function act(f){ f(); statusBar(); next("進入"+mLabel+"賽程", nextGame); }
@@ -1844,9 +2034,15 @@ function seasonEnd(){
     }
   }
   // 獎項
+  if(S.level==="一軍"||S.level==="MLB"){
+    if(!S.flags.topDebutSeason) S.flags.topDebutSeason=S.proSeasonN;   // 記錄最高層級初登場年
+  }
   if(goodSeason&&(S.level==="一軍"||S.level==="MLB")){
     if(rating>=70){ extra("年度MVP級的表現！"); S.honors.push(S.year+" 年度打擊/投手獎"); S.fame+=15; }
-    else if(S.proSeasonN<=2&&rating>=50){ extra("新人王！"); S.honors.push(S.year+" 新人王"); S.fame+=12; }
+    else if(!S.flags.roty && S.proSeasonN===S.flags.topDebutSeason && rating>=50){
+      S.flags.roty=1;
+      extra("新人王！"); S.honors.push(S.year+" 新人王"); S.fame+=12;
+    }
     else S.fame+=6;
   }
   next(null, ()=>postSeason(rank, goodSeason, rating));
@@ -1912,14 +2108,58 @@ function offSeason(goodSeason, rating, champion){
   hr(); head("熱身結束的冬天", "休賽季・"+S.year+"年末");
   // 薪資
   const mult = rating>=70?1.6: rating>=45?1.25: rating>=30?1.0:0.85;
-  S.salary=Math.max(60,Math.round(S.salary*mult));
+  const capMap={CPBL:5000, NPB:45000, MLB:160000};
+  S.salary=Math.min(capMap[S.league]||5000, Math.max(60,Math.round(S.salary*mult)));
   S.earnings+=S.salary;
   sys("年度結算：新年薪 "+fmtMoney(S.salary)+"（生涯累計 "+fmtMoney(S.earnings)+"）");
+  /* 年度回顧特輯 */
+  const sea=S.sea;
+  let rv='<table class="career"><tr><th colspan="2">'+S.year+'年 年度回顧特輯</th></tr>';
+  const myLine = S.pos==="B"? ("打擊率 "+(sea.ab?(sea.h/sea.ab).toFixed(3):"—")+"・"+sea.hr+"轟・"+sea.rbi+"打點")
+                            : (sea.w+"勝"+sea.l+"敗・"+sea.so+"K・防禦率 "+(sea.ip?(sea.er*9/sea.ip).toFixed(2):"—"));
+  rv+='<tr><td>球季成績</td><td>'+esc(myLine)+'</td></tr>';
+  rv+='<tr><td>球隊戰績</td><td>'+sea.tw+'勝'+sea.tl+'敗'+(champion?"・🏆 冠軍！":"")+'</td></tr>';
+  if(sea.injured) rv+='<tr><td>傷痛</td><td>傷退'+sea.injured+'次，共缺陣多場</td></tr>';
+  const yearHonors=S.honors.filter(h=>String(h).startsWith(String(S.year)));
+  if(yearHonors.length) rv+='<tr><td>年度榮譽</td><td>'+esc(yearHonors.join("、"))+'</td></tr>';
+  rv+='<tr><td>身價</td><td>'+fmtMoney(S.salary)+'／年</td></tr></table>';
+  out(rv,"story");
   const steps=[];
-  // 國際賽
-  const intl = intlThisYear();
-  if(intl && S.fame>=45 && overall()>=55 && (S.level==="一軍"||S.level==="MLB"||S.level==="AAA")){
-    steps.push(()=>intlTournament(intl, nextStep));
+  /* 隊友羈絆延續（依高中互動深度，一次性） */
+  if((S.flags.taiya||0)>=3 && !S.flags.bondTaiya && S.proSeasonN>=1){
+    steps.push(()=>{
+      S.flags.bondTaiya=1;
+      hr(); head("老隊長的邀約", "泰雅的休賽季特訓");
+      story("手機響起熟悉的大嗓門——泰雅在社會人隊打出名堂了。「學弟！回花蓮，陪我練一個禮拜！」");
+      story("山路衝刺、溪邊重訓、原住民風味的補給……高中那股不要命的勁又回來了。");
+      const m=spGain(14,6,8); S.fatigue=Math.max(0,(S.fatigue||0)-10); yarukiUp(2);
+      gain(m+"　疲勞-10　狀態+2（老隊長的重量）");
+      nextStep();
+    });
+  }
+  if((S.flags.ahai||0)>=4 && !S.flags.bondAhai && S.proSeasonN>=2 && S.league==="CPBL" && S.pos==="P"){
+    steps.push(()=>{
+      S.flags.bondAhai=1; S.flags.battery=1;
+      hr(); head("重逢的暗號", "阿海加盟"+S.team);
+      story("球團補強名單公布——捕手：阿海！記者會上他晃著那本厚厚的配球筆記：「海線的暗號，還記得吧？」");
+      extra("高中投捕搭檔在職業重組！");
+      gain("獲得羈絆加成【黃金電池】：三振率永久上升");
+      nextStep();
+    });
+  }
+  if((S.flags.black||0)>=3 && !S.flags.bondBlack && S.proSeasonN>=1){
+    steps.push(()=>{
+      S.flags.bondBlack=1; S.flags.analyst=1;
+      hr(); head("數據軍師", "小黑的新職業");
+      story("小黑沒打職業——他成了數據分析師，第一個客戶就是你。「你的揮棒（投球）我從高中逐格看到現在，弱點我最清楚。」");
+      gain("獲得羈絆加成【專屬分析師】：「影片研究對手」效果永久提升");
+      nextStep();
+    });
+  }
+  // 國際賽（依年份日曆與資格自動匹配最高級別賽事）
+  const intlEvt = pickIntl();
+  if(intlEvt){
+    steps.push(()=>intlTournament(intlEvt, nextStep));
   }
   // 旅外機會
   if(S.league==="CPBL" && S.proSeasonN>=3 && S.fame>=70 && rating>=50 && !S.flags.abroadAsked){
@@ -1931,6 +2171,33 @@ function offSeason(goodSeason, rating, champion){
         {label:"旅美（MLB）──最高殿堂", fn:()=>{ const t=pick(MLB_TEAMS); extra(t+"與"+S.name+"簽下大聯盟合約！"); S.league="MLB"; S.team=t; S.level=overall()>=70?"MLB":"AAA"; S.salary=Math.round(S.salary*3); S.flags.teamStr=ri(45,60); nextStep(); }},
         {label:"留在中職，當看板選手", fn:()=>{ story("你選擇了熟悉的主場和聲援你的人們。"); S.fame+=5; nextStep(); }},
       ],"人生最大的岔路之一。");
+    });
+  }
+  // 遠距離危機（旅外且未婚）
+  if(S.gf && !S.married && S.league!=="CPBL" && !S.flags.ldrTest && S.proSeasonN>=1){
+    steps.push(()=>{
+      S.flags.ldrTest=1;
+      hr(); head("越洋電話", GF[S.gf].name+"與"+(S.league==="NPB"?"日本":"美國")+"的時差");
+      story("深夜的宿舍，視訊那頭的"+GF[S.gf].name+"欲言又止：「……最近，好像都是我在等你的訊息。」");
+      choices([
+        {label:"「休季我就回台灣。機票已經訂了。」（用心維繫）", fn:()=>{
+          S.love[S.gf]=(S.love[S.gf]||0)+8; S.fatigue=Math.min(100,(S.fatigue||0)+5);
+          story("你排開一切飛回台灣。桃園機場的出境大廳，她哭著捶了你一拳。");
+          gain(GF[S.gf].name+"好感大幅上升（疲勞+5，值得）");
+          nextStep();
+        }},
+        {label:"「……現在是我生涯最關鍵的時候。」", fn:()=>{
+          if(chance(0.5)){
+            loss("電話那頭沉默了很久。……幾週後，她提了分手。");
+            story("你盯著手機裡的合照看了一夜，隔天照常出賽。職業選手的日常，殘忍得很安靜。");
+            S.gf=null; yarukiDn(2);
+          }else{
+            story(GF[S.gf].name+"深吸一口氣：「好。那我等你成名的那天。」——她比你想的更強。");
+            S.love[S.gf]=(S.love[S.gf]||0)+3;
+          }
+          nextStep();
+        }},
+      ]);
     });
   }
   // 婚姻
@@ -1983,44 +2250,78 @@ function offSeason(goodSeason, rating, champion){
   }
   nextStep();
 }
-function intlThisYear(){
-  const y=S.year;
-  if((y-2028)%4===0) return "世界12強賽";
-  if((y-2030)%4===0) return "世界棒球經典賽";
+/* ================= 國際賽日曆（依年份與資格） =================
+   經典賽(2029起每3年) > 奧運(2028起每4年) > 12強(2027起每4年) >
+   亞運(2026起每4年) > U23世界盃(偶數年,23歲以下) > 亞錦賽(奇數年,低門檻) */
+function intlEvents(){
+  const y=S.year, list=[];
+  if(y>=2029 && (y-2029)%3===0) list.push({name:"世界棒球經典賽", tier:3, fame:55, ov:60, top:true});
+  if(y>=2028 && (y-2028)%4===0) list.push({name:"奧運棒球", tier:3, fame:50, ov:58, top:true});
+  if(y>=2027 && (y-2027)%4===0) list.push({name:"世界12強賽", tier:3, fame:45, ov:55, top:true});
+  if(y>=2026 && (y-2026)%4===0) list.push({name:"亞洲運動會", tier:2, fame:35, ov:50});
+  if(y%2===0) list.push({name:"U23世界盃", tier:2, fame:25, ov:48, maxAge:23});
+  if((y-2025)%2===0) list.push({name:"亞洲棒球錦標賽", tier:1, fame:22, ov:44});
+  return list;
+}
+function intlQualify(e){
+  if(S.fame < e.fame) return false;
+  if(overall() < e.ov) return false;
+  if(e.maxAge && S.age > e.maxAge) return false;
+  if(e.top && !(S.level==="一軍"||S.level==="MLB"||S.level==="AAA")) return false;
+  return true;
+}
+function pickIntl(){
+  const evts=intlEvents().sort((a,b)=>b.tier-a.tier);
+  for(const e of evts){ if(intlQualify(e)) return e; }
+  // 有賽事但沒入選：給落選訊息（有點知名度才顯示）
+  if(evts.length && S.fame>=18 && !S.flags["intlMiss"+S.year]){
+    S.flags["intlMiss"+S.year]=1;
+    sys("（"+evts[0].name+"中華隊名單公布……沒有你的名字。門檻：知名度"+evts[0].fame+"＋戰力"+evts[0].ov+(evts[0].top?"＋最高層級":"")+"）");
+  }
   return null;
 }
-function intlTournament(name, done){
-  hr(); head("中華隊徵召", name+"・"+S.year);
-  extra(S.name+" 入選中華隊！");
-  story("穿上胸前寫著TAIWAN的球衣，國歌在異國的球場響起——雞皮疙瘩從沒讓人失望。");
-  S.honors.push(S.year+" "+name+"國手");
+function intlTournament(evt, done){
+  hr(); head("中華隊徵召", evt.name+"・"+S.year+"　"+"★".repeat(evt.tier));
+  extra(S.name+" 入選"+evt.name+"中華隊！");
+  story("穿上胸前寫著TAIWAN的球衣，國歌在球場響起——雞皮疙瘩從沒讓人失望。");
+  if(evt.tier===3 && S.flags.rivalNPB){
+    story("名單上還有一個熟悉的名字：何俊毅（阪神虎）。高中鬥了三年的宿敵，如今是併肩的隊友——中華隊的一三號先發。");
+    talk("何俊毅","（遞來一罐運動飲料）……別漏氣啊，海線的。");
+  }
+  S.honors.push(S.year+" "+evt.name+"國手");
+  const foes = evt.tier===3? ["日本","美國","韓國","墨西哥","委內瑞拉"]
+             : evt.tier===2? ["日本","韓國","中國","菲律賓"]
+             : ["韓國","日本社會人選拔","菲律賓"];
+  const finalFoe = evt.tier>=2? "日本" : "韓國";
   let w=0;
   intlGame(1);
   function intlGame(g){
     if(g>2){ intlFinal(); return; }
+    const foe=pick(foes.filter(f=>f!==finalFoe));
     choices([
       {label:"全力出賽", fn:()=>ig("full")},
       {label:"一般出賽", fn:()=>ig("norm")},
-    ], name+" 預賽第"+g+"戰 vs "+pick(["日本","韓國","荷蘭","古巴","委內瑞拉"])+"　重要度★★★");
+    ], evt.name+" 預賽第"+g+"戰 vs "+foe+"　重要度"+"★".repeat(evt.tier));
     function ig(c){
       const win=chance(0.45+(overall()-50)*0.004+(c==="full"?0.06:0));
-      if(win){w++; gameLine("　勝！全台轉播收視飆高。"); S.fame+=5;}
+      if(win){w++; gameLine("　勝！全台轉播收視飆高。"); S.fame+=2+evt.tier;}
       else gameLine("　惜敗……");
       next(null, ()=>intlGame(g+1));
     }
   }
   function intlFinal(){
     if(w===0){ story("預賽止步。……穿上這件球衣的重量，你記住了。"); return next(null, nextStepOut); }
-    head("關鍵一戰", "對日本──先發投手：何俊毅");
-    story("宿敵站在對面的投手丘/打擊區。三年高中、各自的職業路，全部濃縮在這個對決。");
-    startMatch({name:name+"・關鍵戰", foe:"日本代表", foeStr:9, innings:3, onEnd:(win)=>{
+    head("關鍵一戰", "對"+finalFoe+"──"+(evt.tier===3&&S.flags.rivalNPB?"何俊毅先發，你壓陣":"整個台灣都在看"));
+    if(evt.tier===3&&S.flags.rivalNPB) story("何俊毅先發六局好投退場，走下投手丘時朝你點了點頭——接下來，看你的了。");
+    startMatch({name:evt.name+"・關鍵戰", foe:finalFoe+"代表", foeStr:6+evt.tier, innings:3, onEnd:(win)=>{
       if(win){
-        extra("擊敗日本！"+S.name+"成為全民英雄");
-        S.fame+=25; S.honors.push(S.year+" "+name+"擊敗日本"); S.flags.hof=(S.flags.hof||0)+25;
-        talk("何俊毅","……又是你。──下次，國際賽決賽見。");
+        extra("擊敗"+finalFoe+"！"+S.name+"成為全民英雄");
+        S.fame+=8*evt.tier+1; S.honors.push(S.year+" "+evt.name+"擊敗"+finalFoe);
+        S.flags.hof=(S.flags.hof||0)+8*evt.tier;
+        if(evt.tier===3&&S.flags.rivalNPB) talk("何俊毅","（把你高高抱起）海線的！我們做到了！！");
       }else{
-        story("敗給了宿敵。但這場對決的轉播畫面，將被重播十年。");
-        S.fame+=10;
+        story("惜敗……但這件球衣的每個鏡頭，都已刻進全台球迷的記憶。");
+        S.fame+=3*evt.tier;
       }
       next(null, nextStepOut);
     }});
