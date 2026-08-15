@@ -684,7 +684,8 @@ const TRAIT_META={
   distract:{n:"外務纏身",kind:"bad",fx:"能力骰總收益下降",how:"過度投入通告、夜生活與感情風波"},
   cancer:{n:"更衣室毒瘤",kind:"bad",fx:"交易風險上升、續約與市場報價惡化",how:"反覆豪賭失敗或拒絕合理下放"},
   ambience:{n:"氣氛大師",kind:"bad",fx:"公開抱怨後，往後交易傳聞更頻繁",how:"兩次公開向媒體抱怨球隊"},
-  thief:{n:"薪水小偷",kind:"bad",fx:"事件成功率下降、長約聲望受損",how:"拒絕下放後仍未打回合約身價"}
+  thief:{n:"薪水小偷",kind:"bad",fx:"事件成功率下降、長約聲望受損",how:"拒絕下放後仍未打回合約身價"},
+  gutsy:{n:"背水一戰",kind:"good",fx:"帶傷出賽的表現與斷裂風險減半、關鍵戰再加成",how:"在醫療禁令下挺身而出並撐住關鍵戰"}
 };
 const TRAIT_ORDER=Object.keys(TRAIT_META);
 const ABIL_META={
@@ -784,6 +785,7 @@ function traitGameEdge(opts){
   /* 特性對「關鍵情境」給小幅門檻修正，不是直接預定勝負。 */
   ensurePlayerSystems();opts=opts||{};let edge=0;
   if(S.traits.clutch&&opts.keyGame)edge+=0.035;
+  if(S.traits.gutsy&&opts.keyGame)edge+=0.025;
   if(S.traits.intlace&&opts.international)edge+=0.05;
   if(S.traits.onetool&&opts.batting)edge+=0.018;
   return edge;
@@ -842,6 +844,7 @@ function armPerformanceMod(){
   ensurePlayerSystems();let m=0;
   if(S.armHealth.readiness<70)m-=(70-S.armHealth.readiness)/180;
   const r=S.armHealth.load/armCap();if(r>0.55)m-=(r-0.55)*0.32;
+  if(S.traits.gutsy)m*=0.5; // 背水一戰：帶傷出賽的表現懲罰減半
   return Math.max(-0.28,m);
 }
 function addArmLoad(pitches,choice,mult){
@@ -930,7 +933,7 @@ function renderTraitsHTML(){
   ensurePlayerSystems();
   const tags=TRAIT_ORDER.filter(k=>S.traits[k]).map(k=>'<span class="trait-tag '+(TRAIT_META[k].kind==="bad"?'bad':'good')+'" title="'+esc(TRAIT_META[k].fx)+'">'+esc(traitName(k))+'</span>').join(' ');
   let h='<div class="trait-wrap">'+(tags||'<span class="sys">（尚未解鎖生涯特性）</span>')+'</div>';
-  h+='<details class="trait-book"><summary>查看完整 27 種生涯特性與解鎖條件</summary><table class="career"><tr><th>狀態</th><th>特性</th><th>效果</th><th>取得條件</th></tr>';
+  h+='<details class="trait-book"><summary>查看完整 '+TRAIT_ORDER.length+' 種生涯特性與解鎖條件</summary><table class="career"><tr><th>狀態</th><th>特性</th><th>效果</th><th>取得條件</th></tr>';
   TRAIT_ORDER.forEach(k=>{const d=TRAIT_META[k],on=S.traits[k];h+='<tr class="'+(on?'trait-on':'trait-locked')+'"><td>'+(on?'已解鎖':'未解鎖')+'</td><td>'+esc(traitName(k))+'</td><td style="text-align:left">'+esc(d.fx)+'</td><td style="text-align:left">'+esc(d.how)+'</td></tr>';});
   h+='</table></details>';return h;
 }
@@ -1976,6 +1979,13 @@ function matchFactorPanel(cfg,role,cap,adv,fp){
     +'<tr><td>種子變因</td><td>'+esc(luck)+'；每打席與每半局依次取樣。種子決定取樣順序，能力與骰面決定判定門檻</td></tr></table>';
 }
 
+/* ---- 帶傷上陣（英雄召喚）資格：夠強或該賽事數據頂尖 ---- */
+function heroCallQualified(cfg){
+  if(ovP()>=55)return true;
+  const agg=aggregateStatGames(ensureStatBook().games.filter(x=>x.competitionKey===cfg.competitionKey));
+  const outs=agg&&agg.pit?agg.pit.outs:0,er=agg&&agg.pit?agg.pit.er:0;
+  return outs>=18&&(er*27/outs)<=3.2; // 該賽事至少6局且防禦率≤3.2
+}
 /* ---- 比賽入口（story/career 介面不變） ---- */
 function startMatch(cfg){
   cfg.competitionKey=cfg.competitionKey||"LEGACY.UNCLASSIFIED";
@@ -2032,7 +2042,27 @@ function startMatch(cfg){
   sys("球探情報：對手強度"+cfg.foeStr+"/9・"+handTxt(fp.hand)+"投・"+fp.type
     +(S.pos==="P"&&role!=="OUT"?("　你："+pitchRoleLabel(role)+"（容量約"+cap+"球）"):"")
     +(S.pos!=="P"||S.twoWay?(adv?"　左右對決有利":""):""));
-  if(S.pos==="P"&&role!=="OUT"){
+  const heroQualify=S.pos==="P"&&role==="OUT"&&cfg.mustDecide&&heroCallQualified(cfg);
+  if(heroQualify){
+    const inRehab=!!(S.flags.rehab||(S.flags.pitchUnavailableUntilTurn!=null&&S.phase==="hs"&&S.turn<S.flags.pitchUnavailableUntilTurn));
+    const baseRisk=(inRehab?0.35:0.22)*(S.traits.gutsy?0.5:1)*traitInjuryMult();
+    hr();head("板凳旁的對話","醫療報告 vs. 輸了就結束的比賽");
+    story("你被醫療組列為不可登板。但比賽走到這裡，牛棚已經空了。教練蹲到你面前，聲音壓得很低：「數據我看過，你是我們最好的牌。……我只問一次——上，還是不上？沒有人會怪你。」");
+    sys("帶傷登板風險評估：韌帶斷裂機率約 "+Math.round(baseRisk*100)+"%（斷裂＝立即手術、本季報銷）。撐住則有大量成長與只屬於你的故事。");
+    choices([
+      {label:"「給我球。」｜帶傷短局數登板",cls:"risk",fn:()=>{
+        M.heroCall={risk:baseRisk};
+        M.pitchRole="MR";S.currentPitchRole="MR";
+        M.pitchCap=Math.max(18,Math.round(pitcherCapacity("MR","rest")*0.8));
+        const hn=Math.max(1,Math.min(2,Math.floor(M.pitchCap/18)));
+        M.pitchStart=Math.max(1,cfg.innings-hn+1);M.pitchEnd=cfg.innings;
+        S.armHealth.effort="rest";
+        extra("醫療組別過頭去——你走上了牛棚投手丘");
+        next("比賽開始！",simulateGame);
+      }},
+      {label:"聽醫療的，坐在板凳上看完",primary:true,fn:()=>{story("你握緊又鬆開的右手放回了膝蓋上。有些帳，留給未來的自己討。");next("比賽開始！",simulateGame);}},
+    ],"這個選擇不會有人替你做。");
+  }else if(S.pos==="P"&&role!=="OUT"){
     choices([
       {label:"普通投｜標準球威・容量約"+cap+"球",primary:true,fn:()=>{setMatchPitchPlan("norm");simulateGame();}},
       {label:"全力投｜球威提高・手臂負荷×1.28",cls:"risk",fn:()=>{setMatchPitchPlan("full");simulateGame();}},
@@ -2284,6 +2314,21 @@ function finishMatch(){
        +'<tr><td>'+esc(competitionLabel(M.cfg.competitionKey))+'通算</td><td>'+compAgg.bat.pa+'</td><td>'+compAgg.bat.ab+'</td><td>'+compAgg.bat.h+'</td><td>'+compAgg.bat.d2+'</td><td>'+compAgg.bat.hr+'</td><td>'+compAgg.bat.rbi+'</td><td>'+compAgg.bat.bb+'</td><td>'+compAgg.bat.so+'</td><td>'+fmtStat3(tr.avg)+'</td><td>'+fmtStat3(tr.ops)+'</td></tr></table>';
   }
   out("【個人成績單】"+box,"story");
+  if(M.heroCall&&hasPit){
+    const broke=chance(M.heroCall.risk);
+    if(broke){
+      extra("最不想聽見的聲音——手肘傳來一聲悶響");
+      story("你投完最後一球就蹲了下去。隊醫衝上投手丘的那一刻，全場安靜得能聽見海風。");
+      performArmSurgery({},false);
+    }else{
+      extra("帶傷撐住了！這一場會被記住很多年");
+      const heroGain=spGain(win?10:6,win?10:6,win?10:6);
+      S.fame+=win?8:5;S.traitCounters.keyWins++;
+      gain("背水一戰的淬鍊："+heroGain+"、知名度+"+(win?8:5));
+      unlockTrait("gutsy","在醫療禁令下挺身而出並撐住關鍵戰");
+      nick(S.throwHand==="L"?"鐵血左腕":"鐵血右腕");
+    }
+  }
   traitProgress();
   const keyGood=(hasPit&&pit.er<=2&&pit.outs>=6)||(hasBat&&(bat.h>=2||bat.hr>0));
   if(M.cfg.mustDecide&&keyGood){
