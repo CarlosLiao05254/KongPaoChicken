@@ -740,28 +740,28 @@ const ABIL_HOW={
   "センス○":"學業累積到60以上時讀書頓悟",
   "機會○":"廟口抽中上上籤",
   "選球眼":"廟口上上籤（野手）",
-  "拉打王":"比賽中拉打方向安打累積6支",
-  "推打達人":"推打方向安打累積6支",
+  "拉打王":"拉打方向安打累積6支且力量達100",
+  "推打達人":"推打方向安打累積6支且接觸達8",
   "內角剋星":"吃下內角球安打累積8支",
   "外角剋星":"外角球安打累積8支",
-  "左投剋星":"對左投安打累積6支",
-  "鷹眼":"精準選球（四壞/纏鬥）累積14次",
+  "左投剋星":"對左投安打累積6支且接觸達7",
+  "鷹眼":"精準選球累積14次且接觸達6",
   "速差魔術師":"速差配球三振累積10次",
-  "配球師":"配球連攜三振累積22次",
+  "配球師":"配球連攜三振累積22次且控球達110",
   "雙殺製造機":"誘導雙殺累積5次",
-  "內角職人":"配球取樣40球以上且六成攻內角",
-  "外角職人":"配球取樣40球以上且六成攻外角",
+  "內角職人":"配球取樣40球以上、六成攻內角且控球達100",
+  "外角職人":"配球取樣40球以上、六成攻外角且控球達100",
   "左打者殺手":"左投對左打三振累積10次",
   "火線交叉":"左投對右打內角三振累積8次",
   "逆境○":"落後局面敲出安打累積8支",
-  "再見男":"延長賽或最終局的致勝安打累積2支",
-  "盜壘○":"盜壘成功累積8次",
+  "再見男":"最終局／延長的關鍵安打且球隊贏球，累積2場",
+  "盜壘○":"盜壘成功累積8次且跑力達9",
   "廣角打法":"同時持有「拉打王」與「推打達人」",
   "威壓感":"知名度120以上且力量達A級（打者）",
-  "尾勁○":"單場雙位數三振累積2場",
+  "尾勁○":"單場雙位數三振累積2場且球速達140",
   "重球":"單季被全壘打壓在極低（結算時判定）",
   "逃球":"控球達160後的投球智慧",
-  "完投體質":"完投比賽累積3場",
+  "完投體質":"完投累積3場且耐力達130",
   "鬼氣逼人":"生涯救援成功累積20次",
   "冷面投手":"低迷狀態下仍投出優質內容累積2場",
   "回復○":"主動保養累積30次的身體管理",
@@ -773,7 +773,7 @@ const ABIL_HOW={
   "手感火燙":"單場三安打累積3場",
   "再來一發":"單場雙響砲累積2場",
   "接棒者":"隊友先馳得點的半局跟進安打累積8支",
-  "大舞台":"國際賽與淘汰戰累積出賽10場",
+  "大舞台":"國際賽與淘汰戰的優質表現累積10場",
   "人氣者":"知名度達80自動獲得",
   "氣氛製造機":"泰雅、阿海、小黑三條羈絆全部達成",
   "越投越順":"先發勝投累積10場",
@@ -1072,6 +1072,12 @@ function resolveArmCrisis(done,ctx){
     }}
   ],"開刀的代價是時間；打針的代價是不確定的未來。所有機率都由目前種子決定。");
   return true;
+}
+function injuryLedgerHTML(){
+  const surg=(S.armHealth&&S.armHealth.surgeries||0)+(S.flags.bigInjuries&&S.pos!=="P"?0:0);
+  const big=(S.flags.injHeavy||0)+(S.flags.bigInjuries||0);
+  return '<div class="statgrid"><div class="cell">傷病履歷 <b>輕傷'+(S.flags.injLight||0)+'次・大傷'+big+'次</b></div>'
+    +'<div class="cell">手術紀錄 <b>'+((S.armHealth&&S.armHealth.surgeries)||0)+'次開刀'+(S.pos==="P"?('・打針'+((S.armHealth&&S.armHealth.injections)||0)+'次'):'')+'</b></div></div>';
 }
 function renderTraitsHTML(){
   ensurePlayerSystems();
@@ -1430,7 +1436,7 @@ function statusBar(){
     mastReset("西元"+S.year+"年", "第"+(S.turn+1)+"號");
   }else{
     dateTxt = "西元"+S.year+"年";
-    stage = (S.team||"")+(S.level?("・"+S.level):"")+"・"+S.age+"歲・"+fieldPositionShort();
+    stage = (S.flags&&S.flags.onNationalDuty?("中華隊（徵召自"+(S.team||"")+"）"):(S.team||"")+(S.level?("・"+S.level):""))+"・"+S.age+"歲・"+fieldPositionShort();
     mastReset("西元"+S.year+"年", S.age+"歲");
   }
   const hpCls = S.hp<35?"hp-low":"";
@@ -1486,6 +1492,7 @@ function profileOverlayHTML(){
       +statAbilityCell("arm","肩力",S.arm,null)+statAbilityCell("fld","守備",S.fld,null)+'</div>';
     h+=renderPositionAptitudesHTML();
   }
+  h+=injuryLedgerHTML();
   const sName=S.twoWay?"變/敏":S.pos==="P"?"變化":"敏捷";
   h+='<div class="statgrid"><div class="cell">點數 筋<b>'+S.expK+'</b> 技<b>'+S.expG+'</b> '+sName+'<b>'+S.expS+'</b></div>'
     +'<div class="cell">知名度 <b>'+S.fame+'</b>'+(S.phase==="hs"?('<br>球探 中'+S.scout.cpbl+'・日'+S.scout.npb+'・美'+S.scout.mlb):('<br>綜合戰力 <b>'+overall()+'</b>'))+'</div></div>';
@@ -1534,6 +1541,7 @@ function showProfile(back){
       +'<div class="cell">手臂狀態 <b>'+armStatus()+'</b><br>短期可用 '+Math.round(S.armHealth.readiness)+'/100</div>'
       +'<div class="cell">長期負荷 <b>'+S.armHealth.load.toFixed(1)+'/'+armCap()+'</b><br>上次 '+Math.round(S.armHealth.lastPitches||0)+' 球</div>'
       +'<div class="cell">醫療紀錄 <b>危機'+S.armHealth.crises+'・開刀'+S.armHealth.surgeries+'・打針'+S.armHealth.injections+'</b></div></div>';
+    card+=injuryLedgerHTML();
     if(S.twoWay){
       card+='<div class="ability-section-title">二刀流・打擊能力</div><div class="statgrid">'
         +statAbilityCell("traj","彈道","Lv"+S.traj,"打球仰角與長打軌跡")+statAbilityCell("meet","接觸",S.meet,"擊球面與安打穩定性")
@@ -1871,6 +1879,7 @@ function injuryEvent(kind){
     /* 大傷：需要手術 */
     story("痛得不對勁。醫院的檢查結果——"+(armInjury?"手肘韌帶已到危險臨界，醫療團隊提出手術或打針兩條路。":"膝蓋半月板破裂，需要手術。"));
     if(armInjury){S.armHealth.load=armCap();resolveArmCrisis(endTurn,{forced:true});return;}
+    S.flags.injHeavy=(S.flags.injHeavy||0)+1;
     extra("進行手術——缺席一個月");
     S.power=Math.max(1,S.power-6); S.run=Math.max(1,S.run-1); loss("手術與休養……力量-6、跑力-1、教練評價-8");
     S.evCoach=Math.max(0,S.evCoach-8); S.hp=50; S.tough=Math.max(0,S.tough-2);
@@ -1878,6 +1887,7 @@ function injuryEvent(kind){
     story("病房的窗外傳來球場的練習聲。……復出那天，要變得比受傷前更強。");
     next(null, endTurn); return;
   }
+  S.flags.injLight=(S.flags.injLight||0)+1;
   const sev = chance(0.3+Math.max(0,(5-S.tough))*0.03)? 2 : 1;
   if(sev===2){
     story("校醫搖搖頭：至少休養一週。");
@@ -1956,7 +1966,7 @@ function afterAction(){
 /* ---- 能力點分配 ---- */
 function abilityCostMultiplier(key,v){
   if(key==="velo")return v>=160?4.4:v>=155?3.1:v>=150?2.2:v>=145?1.65:v>=140?1.25:1;
-  if(["meet","run","arm","fld"].includes(key))return v>=14?3.6:v>=12?2.7:v>=10?2:v>=8?1.55:v>=6?1.25:1;
+  if(["meet","run","arm","fld"].includes(key))return v>=14?5.2:v>=12?3.6:v>=10?2.5:v>=8?1.8:v>=6?1.35:1;
   if(["power","ctrl","stam"].includes(key))return v>=200?3.4:v>=170?2.6:v>=140?2:v>=110?1.55:v>=80?1.25:1;
   if(key==="traj")return v>=3?2:1;
   return 1;
@@ -1984,7 +1994,8 @@ function allocMenu(back){
   const sName = S.twoWay?"變化／敏捷（共用）":S.pos==="P"?"變化":"敏捷";
   sys("持有點數　筋力"+S.expK+"　技術"+S.expG+"　"+sName+S.expS);
   const sense = S.abil.includes("センス○")?0.87 : 1;
-  const c=(n)=>Math.ceil(n*sense);
+  const COST_DIFF=1.15; // 全域難度旋鈕：升級成本整體上調（參照 yakyolife 的緊點數經濟）
+  const c=(n)=>Math.ceil(n*sense*COST_DIFF);
   const cap=(key,hard)=>trainingPotentialCap(key,hard,S);
   const tierMult=abilityCostMultiplier;
   const steppedCost=(base,key,current,actualStep,normalStep)=>c(base*tierMult(key,current)*Math.max(0.25,actualStep/(normalStep||1)));
@@ -2009,13 +2020,13 @@ function allocMenu(back){
   if(S.pos==="B"||S.twoWay){
     (()=>{const pc=cap("traj",4),gc=steppedCost(24,"traj",S.traj,1,1),kc=steppedCost(8,"traj",S.traj,1,1);
       buy(batN("彈道+1（"+S.traj+"→"+Math.min(pc,S.traj+1)+" / 潛力"+pc+"）"),"技"+gc+" 筋"+kc+tierNote("traj",S.traj),()=>S.traj<pc&&S.expG>=gc&&S.expK>=kc,()=>{raise("traj",1);S.expG-=gc;S.expK-=kc;},S.traj>=pc);})();
-    (()=>{ const pc=cap("meet",15),sw=(S.hand==="S")?1.15:1; const gc=Math.ceil(steppedCost(18,"meet",S.meet,1,1)*sw),kc=Math.ceil(steppedCost(4,"meet",S.meet,1,1)*sw);
+    (()=>{ const pc=cap("meet",15),sw=(S.hand==="S")?1.15:1; const gc=Math.ceil(steppedCost(24,"meet",S.meet,1,1)*sw),kc=Math.ceil(steppedCost(6,"meet",S.meet,1,1)*sw);
       buy(batN("接觸+1（"+S.meet+"→"+Math.min(pc,S.meet+1)+" / 潛力"+pc+"）"+(sw>1?"(開弓+15%)":"")),"技"+gc+" 筋"+kc+tierNote("meet",S.meet),()=>S.meet<pc&&S.expG>=gc&&S.expK>=kc,()=>{raise("meet",1);S.expG-=gc;S.expK-=kc;},S.meet>=pc); })();
     (()=>{const pc=cap("power",255),step=trainingStepToCap("power",S.power,8,255,S),kc=steppedCost(16,"power",S.power,step,8);
       buy(batN("力量+"+step+"（"+S.power+"→"+Math.min(pc,S.power+step)+" / 潛力"+pc+"）"),"筋"+kc+tierNote("power",S.power),()=>step>0&&S.expK>=kc,()=>{raise("power",step);S.expK-=kc;},step<=0);})();
-    (()=>{const pc=cap("run",15),sc=steppedCost(18,"run",S.run,1,1);buy(batN("跑力+1（"+S.run+"→"+Math.min(pc,S.run+1)+" / 潛力"+pc+"）"),"敏"+sc+tierNote("run",S.run),()=>S.run<pc&&S.expS>=sc,()=>{raise("run",1);S.expS-=sc;},S.run>=pc);})();
-    (()=>{const pc=cap("arm",15),kc=steppedCost(10,"arm",S.arm,1,1),sc=steppedCost(8,"arm",S.arm,1,1);buy(batN("肩力+1（"+S.arm+"→"+Math.min(pc,S.arm+1)+" / 潛力"+pc+"）"),"筋"+kc+" 敏"+sc+tierNote("arm",S.arm),()=>S.arm<pc&&S.expK>=kc&&S.expS>=sc,()=>{raise("arm",1);S.expK-=kc;S.expS-=sc;},S.arm>=pc);})();
-    (()=>{const pc=cap("fld",15),gc=steppedCost(12,"fld",S.fld,1,1),sc=steppedCost(8,"fld",S.fld,1,1);buy(batN("守備+1（"+S.fld+"→"+Math.min(pc,S.fld+1)+" / 潛力"+pc+"）"),"技"+gc+" 敏"+sc+tierNote("fld",S.fld),()=>S.fld<pc&&S.expG>=gc&&S.expS>=sc,()=>{raise("fld",1);S.expG-=gc;S.expS-=sc;},S.fld>=pc);})();
+    (()=>{const pc=cap("run",15),sc=steppedCost(24,"run",S.run,1,1);buy(batN("跑力+1（"+S.run+"→"+Math.min(pc,S.run+1)+" / 潛力"+pc+"）"),"敏"+sc+tierNote("run",S.run),()=>S.run<pc&&S.expS>=sc,()=>{raise("run",1);S.expS-=sc;},S.run>=pc);})();
+    (()=>{const pc=cap("arm",15),kc=steppedCost(13,"arm",S.arm,1,1),sc=steppedCost(10,"arm",S.arm,1,1);buy(batN("肩力+1（"+S.arm+"→"+Math.min(pc,S.arm+1)+" / 潛力"+pc+"）"),"筋"+kc+" 敏"+sc+tierNote("arm",S.arm),()=>S.arm<pc&&S.expK>=kc&&S.expS>=sc,()=>{raise("arm",1);S.expK-=kc;S.expS-=sc;},S.arm>=pc);})();
+    (()=>{const pc=cap("fld",15),gc=steppedCost(16,"fld",S.fld,1,1),sc=steppedCost(10,"fld",S.fld,1,1);buy(batN("守備+1（"+S.fld+"→"+Math.min(pc,S.fld+1)+" / 潛力"+pc+"）"),"技"+gc+" 敏"+sc+tierNote("fld",S.fld),()=>S.fld<pc&&S.expG>=gc&&S.expS>=sc,()=>{raise("fld",1);S.expG-=gc;S.expS-=sc;},S.fld>=pc);})();
   }
   if(S.pos==="P"){
     (()=>{const pc=cap("velo",168),kc=steppedCost(12,"velo",S.velo,1,1),gc=steppedCost(6,"velo",S.velo,1,1);buy(pitN("球速+1km（"+S.velo+"→"+Math.min(pc,S.velo+1)+" / 潛力"+pc+"）"),"筋"+kc+" 技"+gc+tierNote("velo",S.velo),()=>S.velo<pc&&S.expK>=kc&&S.expG>=gc,()=>{raise("velo",1);S.expK-=kc;S.expG-=gc;},S.velo>=pc);})();
@@ -2397,7 +2408,7 @@ function ourHalf(inn, foeStr, addPitches){
   if(chance(teamAtk)){ runs+=ri(1,2); M.teamScoredThisInning=true; }
   if((S.pos!=="P"||S.twoWay) && chance(0.55)){
     runs += myPlateAppearance(inn, foeStr, (p)=>{pitches+=p;});
-  }else if(S.pos==="P" && !S.twoWay && chance(0.2)){
+  }else if(S.pos==="P" && !S.twoWay && (S.phase==="hs"||S.phase==="uni") && chance(0.2)){
     gameLine("　(打) 你的打席：投手好好打了顆滾地球出局。");
   }
   addPitches(pitches);
@@ -2416,11 +2427,28 @@ function myPlateAppearance(inn, foeStr, addP){
   if(fp.hand==="L"&&hasT("左投剋星")) pHit+=0.05;
   if(hasT("機會○")&&chance(0.5)) pHit+=0.03;
   if(hasT("內角剋星")||hasT("外角剋星")) pHit+=0.02;
+  /* 對戰相性：對方投手類型 vs 你的打擊工具箱 */
+  if(fp.type==="內角派"){
+    if(hasT("內角剋星"))pHit+=0.05;
+    if(hasT("拉打王"))pHit+=0.03;      // 內角球正好拉
+    if(hasT("推打達人")&&!hasT("廣角打法"))pHit-=0.03; // 內角塞手，推打型吃癟
+  }else if(fp.type==="外角派"){
+    if(hasT("外角剋星"))pHit+=0.05;
+    if(hasT("推打達人"))pHit+=0.03;    // 外角球順勢推
+    if(hasT("拉打王")&&!hasT("廣角打法"))pHit-=0.03;   // 外角引誘，硬拉變滾地
+  }else if(fp.type==="速差派"){
+    if(hasT("選球眼")||hasT("鷹眼"))pHit+=0.03;        // 讀得出變速節奏
+    if(hasT("纏鬥打擊"))pHit+=0.02;
+    if(S.power>=150&&S.meet<=7)pHit-=0.03;             // 大棒子最怕速差
+  }
   const behind=M.scoreUs<M.scoreThem, lastFrame=inn>=M.cfg.innings;
   if(hasT("逆境○")&&behind) pHit+=0.04;
   if(hasT("再見男")&&lastFrame&&M.scoreUs<=M.scoreThem) pHit+=0.05;
   let pBB = 0.07 + (hasT("選球眼")?0.05:0) + (hasT("纏鬥打擊")?0.04:0) + (hasT("鷹眼")?0.03:0);
   let pK  = Math.max(0.06, 0.24 - S.meet*0.010 + foeStr*0.012 - (adv?0.02:0) - (hasT("纏鬥打擊")?0.04:0));
+  /* 打擊型態邏輯：接觸低的大砲＝三振多、保送少、但長打換算高（TTO型） */
+  pBB+=Math.max(-0.02,(S.meet-8)*0.004);
+  if(S.power>=150&&S.meet<=7){pK+=0.03;}
   const nPitch = 3 + (hasT("纏鬥打擊")?ri(1,4):ri(0,2)) + (hasT("選球眼")?1:0);
   addP(nPitch);
   if(chance(Math.max(0.03,(0.09-foeStr*0.005))*(nPitch/4)*(0.7+diceMod("lucky")*0.1)*(hasT("威壓感")?1.5:1))){ pHit+=0.15; } // 磨出失投甜球×機遇運（威壓感放大）
@@ -2441,21 +2469,24 @@ function myPlateAppearance(inn, foeStr, addP){
     bat.h++; S.stats.h++;
     if(fp.hand==="L") S.flags.tVsL=(S.flags.tVsL||0)+1;
     if(behind) S.flags.tClutchBehind=(S.flags.tClutchBehind||0)+1;
-    if(lastFrame&&M.scoreUs<=M.scoreThem) S.flags.tSayonara=(S.flags.tSayonara||0)+1;
+    if(lastFrame&&M.scoreUs<=M.scoreThem) M.sayonaraCand=true; // 賽末平手/落後時的關鍵安打：贏球才算再見
     if(M.teamScoredThisInning) S.flags.tFollowHit=(S.flags.tFollowHit||0)+1;
-    if(chance(0.5))S.flags.tIn=(S.flags.tIn||0)+1;else S.flags.tOut=(S.flags.tOut||0)+1;
+
     if(chance(Math.max(0.03,(S.run-5)*0.02)+(hasT("盜壘○")?0.10:0))){
       bat.sb++; S.flags.tSB=(S.flags.tSB||0)+1;
       gameLine("　(跑) 起跑！滑進二壘——盜壘成功！","B");
     }
     const pull = hasT("拉打王")?0.5 : (hasT("推打達人")||hasT("推打"))?0.2 : 0.35;
     const dir = chance(pull)?"pull":chance(0.5)?"push":"mid";
+    /* 角度歸屬跟揮棒方向連動：拉打吃內角、推打吃外角（棒球邏輯） */
+    const zoneInP=dir==="pull"?0.72:dir==="push"?0.28:0.5;
+    if(chance(zoneInP))S.flags.tIn=(S.flags.tIn||0)+1;else S.flags.tOut=(S.flags.tOut||0)+1;
     if(dir==="pull")S.flags.tPull=(S.flags.tPull||0)+1;
     if(dir==="push")S.flags.tPush=(S.flags.tPush||0)+1;
     if(chance(0.5)){ const zk=chance(0.5)?"tIn":"tOut"; S.flags[zk]=(S.flags[zk]||0)+1; }
     const pHR = Math.min(0.38, S.power*0.0016 + (dir==="pull"?0.04:0) + (adv?0.02:0) + S.traj*0.01 + (hasT("衝擊力")?0.03:0));
     const dirW = dir==="pull"?"強拉左半邊":dir==="push"?"順推右外野":"咬中直擊中堅";
-    if(chance(pHR)){
+    if(chance(pHR+(S.power>=150&&S.meet<=7?0.04:0))){
       bat.hr++; S.stats.hr++; M.lastPAHR=true;
       const rbi=1+(chance(0.35)?1:0);
       bat.rbi+=rbi; S.stats.rbi+=rbi;
@@ -2523,7 +2554,10 @@ function finishMatch(){
     if(bat.h>=3)S.flags.tMultiHit=(S.flags.tMultiHit||0)+1;
     if(bat.hr>=2)S.flags.tTwoHR=(S.flags.tTwoHR||0)+1;
   }
-  if(M.cfg.mustDecide||String(M.cfg.competitionKey).startsWith("INTL."))S.flags.tBigStage=(S.flags.tBigStage||0)+1;
+  const bigStage=M.cfg.mustDecide||String(M.cfg.competitionKey).startsWith("INTL.");
+  const bigStageGood=(hasBat&&(bat.h>=2||bat.hr>0))||(hasPit&&pit.er<=2&&pit.outs>=6);
+  if(bigStage&&bigStageGood)S.flags.tBigStage=(S.flags.tBigStage||0)+1; // 大舞台：站上去還要打出內容
+  if(win&&M.sayonaraCand)S.flags.tSayonara=(S.flags.tSayonara||0)+1;
   if(hasPit){
     if(pit.so>=10)S.flags.tK10=(S.flags.tK10||0)+1;
     if(pit.w&&M.pitchRole==="SP")S.flags.tSPwin=(S.flags.tSPwin||0)+1;
@@ -2537,7 +2571,7 @@ function finishMatch(){
       extra("最不想聽見的聲音——手肘傳來一聲悶響");
       story("你投完最後一球就蹲了下去。隊醫衝上投手丘的那一刻，全場安靜得能聽見海風。");
       performArmSurgery({},false);
-    }else{
+    }else if(pit.outs>=3&&pit.er<=3){
       S.flags.heroSurvives=(S.flags.heroSurvives||0)+1;
       extra("帶傷撐住了！這一場會被記住很多年");
       const heroGain=spGain(win?10:6,win?10:6,win?10:6);
@@ -2549,6 +2583,9 @@ function finishMatch(){
       }else{
         sys("一場成不了傳說——帶傷完投紀錄 "+S.flags.heroSurvives+"／2。再撐住一次，這個名號就是你的。");
       }
+    }else{
+      story("手臂沒有出事……但內容也稱不上撐住。勇氣值得敬佩，傳說需要成績。");
+      const cGain=spGain(3,3,3);gain("至少，這份不服輸淬了點東西："+cGain);
     }
   }
   if(M.overwork&&hasPit){
@@ -2562,7 +2599,7 @@ function finishMatch(){
     }
   }
   traitProgress();
-  const keyGood=(hasPit&&pit.er<=2&&pit.outs>=6)||(hasBat&&(bat.h>=2||bat.hr>0));
+  const keyGood=((hasPit&&pit.er<=2&&pit.outs>=6)||(hasBat&&(bat.h>=2||bat.hr>0)))&&win;
   if(M.cfg.mustDecide&&keyGood){
     S.traitCounters.keyWins++;
     if(S.age<25&&S.traitCounters.keyWins>=7)unlockTrait("clutch","25歲前在七場淘汰／關鍵戰打出好內容");
@@ -2616,15 +2653,18 @@ function traitProgress(){
       ev("打法自成一派——"); addAbil(name); sys(desc);
     }
   };
-  chk("tPull",6,"拉打王","拉打方向的安打與長打率上升");
-  chk("tPush",6,"推打達人","推打方向的安打率上升");
-  chk("tIn",8,"內角剋星","對內角球的打擊上升");
-  chk("tOut",8,"外角剋星","對外角球的打擊上升");
-  chk("tVsL",6,"左投剋星","對左投手的打擊大幅強化");
-  chk("tRead",14,"鷹眼","選球判斷力強化，保送率上升");
+  if(S.power>=100)chk("tPull",6,"拉打王","拉打方向的安打與長打率上升"); // 拉打要有棒速本錢
+  if(S.meet>=8)chk("tPush",6,"推打達人","推打方向的安打率上升");           // 推打要有棒控
+
+  if(S.meet>=8){ // 剋星系需要接觸底子：沒有揮擊精度談不上攻角度
+    chk("tIn",8,"內角剋星","對內角球的打擊上升");
+    chk("tOut",8,"外角剋星","對外角球的打擊上升");
+  }
+  if(S.meet>=7)chk("tVsL",6,"左投剋星","對左投手的打擊大幅強化");
+  if(S.meet>=6)chk("tRead",14,"鷹眼","選球判斷力強化，保送率上升");
   chk("tClutchBehind",8,"逆境○","球隊落後時的打擊大幅提升");
   chk("tSayonara",2,"再見男","延長賽與最終局的關鍵打席強化");
-  chk("tSB",8,"盜壘○","盜壘成功率大幅提高");
+  if(S.run>=9)chk("tSB",8,"盜壘○","盜壘成功率大幅提高"); // 沒有腿談不上盜壘專家
   if(S.abil.includes("拉打王")&&S.abil.includes("推打達人")&&!S.abil.includes("廣角打法")){
     ev("拉推自如，全場都是你的攻擊範圍——"); addAbil("廣角打法"); sys("左右對決的劣勢減半");
   }
@@ -2639,20 +2679,20 @@ function traitProgress(){
   if(S.flags.bondTaiya&&S.flags.bondAhai&&S.flags.bondBlack&&!S.abil.includes("氣氛製造機")){ ev("有你在的休息區，永遠不會安靜——"); addAbil("氣氛製造機"); sys("全隊攻擊小幅提升"); }
   if(S.pos==="P"){
     chk("comboOK",10,"速差魔術師","速差系配球的三振率上升");
-    chk("comboOK",22,"配球師","所有配球連攜的三振率上升");
+    if(S.ctrl>=110)chk("comboOK",22,"配球師","所有配球連攜的三振率上升"); // 配球師是控球＋頭腦的總和
     chk("tDP",5,"雙殺製造機","雙殺誘發率大幅上升");
     const tot=(S.flags.zoneIn||0)+(S.flags.zoneOut||0);
     if(tot>=40){
       const inR=(S.flags.zoneIn||0)/tot;
-      if(inR>=0.6&&!S.abil.includes("內角職人")){ ev("配球慣性成了武器——"); addAbil("內角職人"); sys("內角系投球威力上升"); }
-      if(inR<=0.4&&!S.abil.includes("外角職人")){ ev("配球慣性成了武器——"); addAbil("外角職人"); sys("外角系投球威力上升"); }
+      if(S.ctrl>=100&&inR>=0.6&&!S.abil.includes("內角職人")){ ev("配球慣性成了武器——"); addAbil("內角職人"); sys("內角系投球威力上升"); }
+      if(S.ctrl>=100&&inR<=0.4&&!S.abil.includes("外角職人")){ ev("配球慣性成了武器——"); addAbil("外角職人"); sys("外角系投球威力上升"); }
     }
     if(S.throwHand==="L"){
       chk("tKL",10,"左打者殺手","對左打者的壓制大幅上升");
       chk("tCross",8,"火線交叉","對右打者的內角速球威力大幅上升");
     }
-    chk("tK10",2,"尾勁○","直球尾勁：三振率提高");
-    chk("tCG",3,"完投體質","球數容量提高12%");
+    if(S.velo>=140)chk("tK10",2,"尾勁○","直球尾勁：三振率提高");   // 尾勁是速球派的專利
+    if(S.stam>=130)chk("tCG",3,"完投體質","球數容量提高12%");        // 完投體質要有引擎
     chk("tColdQ",2,"冷面投手","狀態低迷不再影響投球內容");
     chk("tSVcount",20,"鬼氣逼人","短局數登板的壓制力提高");
     if(S.ctrl>=160&&!S.abil.includes("逃球")){ ev("你學會了跟打者「談判」——"); addAbil("逃球"); sys("失投時的傷害減輕"); }
@@ -4185,23 +4225,25 @@ function seasonStart(){
 const SEASON_MONTHS=[4,5,6,7,8,9,10];
 function monthlyGoalPool(){
   const bat=[
-    {txt:"本月打擊率 3成以上",chk:(x)=>x.ab>=8&&x.h/x.ab>=0.3},
-    {txt:"本月敲出 2支全壘打",chk:(x)=>x.hr>=2},
-    {txt:"本月安打 10支以上",chk:(x)=>x.h>=10},
+    {txt:"本月打擊率 3成以上",chk:(x)=>x.ab>=8&&x.h/x.ab>=0.3,weak:()=>S.meet<=9},
+    {txt:"本月敲出 2支全壘打",chk:(x)=>x.hr>=2,weak:()=>S.power<=140},
+    {txt:"本月安打 10支以上",chk:(x)=>x.h>=10,weak:()=>S.meet<=9},
   ];
   const pit=[
-    {txt:"本月三振 18次以上",chk:(x)=>x.so>=18},
-    {txt:"本月防禦率 3.50 以下",chk:(x)=>x.ip>=10&&(x.er*9/x.ip)<=3.5},
-    {txt:"本月投滿 20局",chk:(x)=>x.ip>=20},
+    {txt:"本月三振 18次以上",chk:(x)=>x.so>=18,weak:()=>currentPotentialFloor(S,"breakTotal")<=8||S.velo<=145},
+    {txt:"本月防禦率 3.50 以下",chk:(x)=>x.ip>=10&&(x.er*9/x.ip)<=3.5,weak:()=>S.ctrl<=130},
+    {txt:"本月投滿 20局",chk:(x)=>x.ip>=20,weak:()=>S.stam<=140},
   ];
   return S.twoWay?bat.concat(pit):S.pos==="B"?bat:pit;
 }
 function assignGoal(){
+  /* 教練課題優先針對你目前的弱項出題；沒有明顯弱項才隨機 */
   const s=S.sea;
   const base={h:s.h,ab:s.ab,hr:s.hr,so:s.so,er:s.er,ip:s.ip,tw:s.tw};
   const pool=monthlyGoalPool();
-  const g=pick(pool);
-  S.goal={txt:g.txt, chkIdx:pool.indexOf(g), base:base};
+  const weakPool=pool.filter(g=>g.weak&&g.weak());
+  const g=pick(weakPool.length?weakPool:pool);
+  S.goal={txt:g.txt+(weakPool.length?"（針對弱點）":""), chkIdx:pool.indexOf(g), base:base};
 }
 function evalGoal(){
   if(!S.goal) return;
@@ -4506,8 +4548,13 @@ function perfMod(choice){
 function playGame(choice, imp, foe, silent){
   const s=S.sea;
   const gameNo=s.i+1;
-  const role=S.pos==="P"?effectivePitchRole():null;
-  const pitchingToday=S.pos==="P"&&pitchScheduledAt(s.i);
+  let role=S.pos==="P"?effectivePitchRole():null;
+  let pitchingToday=S.pos==="P"&&pitchScheduledAt(s.i);
+  /* 定位先發者：手臂未回復時是「跳過這次先發」休息，不會臨時改當後援 */
+  if(S.pos==="P"&&S.currentPitchRole==="SP"&&role==="MR"){
+    if(pitchingToday&&!silent)gameLine("（原訂先發因手臂未回復由教練團跳過：這一輪休息調整，輪值順延。）");
+    pitchingToday=false;role="SP";
+  }
   const battingToday=S.pos==="B"||S.twoWay;
   s.i++;
   // 疲勞
@@ -4539,6 +4586,7 @@ function playGame(choice, imp, foe, silent){
     }
     const missG=ri(6,22);
     s.missed=missG;
+    if(missG>=12)S.flags.injHeavy=(S.flags.injHeavy||0)+1;else S.flags.injLight=(S.flags.injLight||0)+1;
     extra(S.name+" 傷退！預計缺陣"+missG+"場");
     loss("受傷……"+(pitchingToday?"球速-1":"力量-3"));
     if(pitchingToday)S.velo=Math.max(100,S.velo-1); else S.power=Math.max(1,S.power-3);
@@ -4597,7 +4645,7 @@ function playGame(choice, imp, foe, silent){
   }
   // 關鍵戰獎懲
   if(imp>=2){
-    if(good&&choice!=="rest"){
+    if(good&&teamWin&&choice!=="rest"){
       S.fame+=3;S.traitCounters.keyWins++;
       if(S.age<25&&S.traitCounters.keyWins>=7)unlockTrait("clutch","25歲前在七場關鍵戰打出好內容");
       if(!silent)gain("關鍵戰立功！知名度+3");
@@ -5785,6 +5833,7 @@ function intlTournament(evt, done){
   intlTournamentBody(evt,done);
 }
 function intlTournamentBody(evt, done){
+  S.flags.onNationalDuty=1;
   extra(S.name+" 入選"+evt.name+"中華隊！");
   story("穿上胸前寫著TAIWAN的球衣，國歌在球場響起——雞皮疙瘩從沒讓人失望。");
   const teamPow=nationalTeamPower(evt);
@@ -5867,6 +5916,7 @@ function intlTournamentBody(evt, done){
     }});
   }
   function nextStepOut(){
+    delete S.flags.onNationalDuty;
     S.fatigue=Math.min(100,S.fatigue+(S.twoWay?14:10));
     const m=spGain(2*evt.tier+w, 2*evt.tier+w, 2*evt.tier+w);
     gain("國際賽的洗禮——與頂尖對手交手讓你脫胎換骨："+m);
