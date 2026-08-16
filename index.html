@@ -926,9 +926,9 @@ function armStatus(){
 function staminaStarterEligible(){ return S.pos==="P"&&S.stam>=110; } // C 級起才具先發容量
 function recommendPitchRole(){
   if(S.pos!=="P")return null;
-  if(S.flags&&S.flags.pitchUnavailableUntilTurn!=null&&S.phase==="hs"&&S.turn<S.flags.pitchUnavailableUntilTurn)return "OUT";
+  if(S.flags&&S.flags.pitchUnavailableUntilTurn!=null&&(S.phase==="hs"||S.phase==="grad")&&S.turn<S.flags.pitchUnavailableUntilTurn)return "OUT";
   if(S.flags&&S.flags.rehab)return "OUT";
-  if(S.armHealth.readiness<28)return "OUT";
+  if(S.armHealth.readiness<35)return "OUT"; // 與 armStatus 紅燈門檻一致
   if(S.pitchRolePref==="CL")return "CL";
   if(S.pitchRolePref==="MR")return "MR";
   if(S.pitchRolePref==="SP"&&staminaStarterEligible()&&S.armHealth.readiness>=55)return "SP";
@@ -940,7 +940,7 @@ function effectivePitchRole(){
   if(!S||S.pos!=="P")return null;ensurePlayerSystems();
   const assigned=S.currentPitchRole||recommendPitchRole();
   if(S.flags&&S.flags.rehab)return "OUT";
-  if(assigned==="OUT"||S.armHealth.readiness<28)return "OUT";
+  if(assigned==="OUT"||S.armHealth.readiness<35)return "OUT";
   if(assigned==="SP"&&(!staminaStarterEligible()||S.armHealth.readiness<55))return "MR";
   return assigned||recommendPitchRole();
 }
@@ -1002,7 +1002,7 @@ function performArmSurgery(ctx,failedInjection){
   if(S.traits.rubber){removeLifeTrait("rubber","選擇進行韌帶重建手術");sys("橡膠手臂因手術而解除。");}
   if(S.phase==="hs"){
     const weeks=failedInjection?24:18;
-    S.flags.pitchUnavailableUntilTurn=Math.min(CAL.length,S.turn+weeks);
+    S.flags.pitchUnavailableUntilTurn=S.turn+weeks; // 不夾在學期內：殘餘復健週會跟到畢業後（U18/職業入團轉換）
     S.hp=Math.min(S.hp,45);S.ailments=S.ailments.filter(a=>a!=="手肘疼痛");
     story("高中復健表排到第"+weeks+"週後；這段期間可讀書、做下肢與打擊訓練，但不能登板或做投球專項。");
   }else{
@@ -1744,7 +1744,7 @@ function actionMenu(){
   list.push({label:"聯絡・約會", fn:phoneMenu});
   list.push({label:"能力強化（不耗回合）", fn:()=>allocMenu(actionMenu)});
   list.push({label:"個人資料", fn:()=>showProfile(actionMenu), small:true});
-  list.push({label:"存檔", fn:saveMenu, small:true});
+  list.push({label:"存檔", fn:()=>saveMenu(actionMenu), small:true});
   choices(list, "體力 "+S.hp+"/"+S.maxHp+"　狀態："+moodName(S.yaruki)+"　學業："+S.study
     +(S.ailments.length?"　異常："+S.ailments.join("、"):"")
     +"　｜按鈕上：筋=筋力點 技=技術點 "+sN+"="+(S.twoWay?"變化／敏捷共用":S.pos==="P"?"變化":"敏捷")+"點（絕好調時×1.3）　x/N→特性＝練滿N次習得（天才/天生怪物可縮短）"
@@ -2025,12 +2025,13 @@ function allocMenu(back){
 const BREAK_POOL = {"曲球":1,"滑球":1,"指叉球":1,"變速球":1,"伸卡球":1};
 
 /* ---- 存檔 ---- */
-function saveMenu(){
+function saveMenu(back){
   hr(); head("存檔專欄");
   const code=saveCode();
   out('<textarea style="width:100%;height:90px;font-size:11px;" onclick="this.select()">'+code+'</textarea>',"sys");
   sys("複製存檔碼保存；頭版選「讀取存檔」貼上即可續玩。種子："+S.seed);
-  next("↩ 返回", ()=>{ if(S.phase==="hs") actionMenu(); else careerLoop(); });
+  /* 返回必須回到呼叫當下的選單；職業期若回 careerLoop 會重開球季白拿開季骰 */
+  next("↩ 返回", (typeof back==="function")?back:()=>{ if(S.phase==="hs") actionMenu(); else careerLoop(); });
 }
 /* ================= 比賽引擎 v3：全自動加權擲骰 × 報紙式戰報 =================
    比賽不再逐球操作：勝負由能力值、特性標籤、左右對決、狀態加權擲骰決定，
@@ -2137,13 +2138,21 @@ function startMatch(cfg){
     story("賽前一天，教務處的公文貼到了球員休息室：你的學業成績未達出賽門檻，本場只能坐在看台。阿誠教練把帽子壓得很低，一句話也沒說。");
     const winP=Math.max(0.10,Math.min(0.6,0.42-cfg.foeStr*0.03+hsMatchGrade()*0.02));
     const win=chance(winP);
-    S.hsRecord=S.hsRecord||{w:0,l:0};
-    if(win){S.hsRecord.w++;gameLine("　沒有你的比賽，隊友咬牙撐下——險勝！但你的名字不在任何一欄。","B");S.evCoach=Math.max(0,S.evCoach-1);}
-    else{S.hsRecord.l++;gameLine("　輸球……你在看台上握緊的拳頭，沒有任何地方可以揮。");S.evCoach=Math.max(0,S.evCoach-3);loss("教練評價-3：「連上場的資格都顧不好。」");}
+    /* 戰績由事件的 onEnd 統一記帳（校隊/縣市/國家隊分流），這裡不重複計 */
+    if(win){gameLine("　沒有你的比賽，隊友咬牙撐下——險勝！但你的名字不在任何一欄。","B");S.evCoach=Math.max(0,S.evCoach-1);}
+    else{gameLine("　輸球……你在看台上握緊的拳頭，沒有任何地方可以揮。");S.evCoach=Math.max(0,S.evCoach-3);loss("教練評價-3：「連上場的資格都顧不好。」");}
     yarukiDn();
     sys("把學業讀回50以上就能重返球場（讀書可拉、每三週會自然下滑1）。");
     statusBar();
-    if(cfg.onEnd){next(null,()=>cfg.onEnd(win));}else next(null,actionMenu);
+    if(cfg.onEnd){
+      const pre={fame:S.fame,cp:S.scout.cpbl,np:S.scout.npb,ml:S.scout.mlb,k:S.expK,g:S.expG,sp:S.expS};
+      next(null,()=>{
+        cfg.onEnd(win);
+        /* 禁賽缺陣：球隊晉級與戰績照算，但個人聲量/球探/成長獎勵全數不計 */
+        S.fame=pre.fame;S.scout.cpbl=pre.cp;S.scout.npb=pre.np;S.scout.mlb=pre.ml;S.expK=pre.k;S.expG=pre.g;S.expS=pre.sp;
+        sys("（禁賽缺陣：個人知名度、球探註記與成長獎勵不計；球隊戰績與晉級結果照算。）");statusBar();
+      });
+    } else next(null,actionMenu);
     return;
   }
   const rngStart=S.rngCalls;
@@ -2171,7 +2180,7 @@ function startMatch(cfg){
     +(S.pos==="P"&&role!=="OUT"?("　你："+pitchRoleLabel(role)+"（容量約"+cap+"球）"):"")
     +(S.pos!=="P"||S.twoWay?(adv?"　左右對決有利":""):""));
   /* 帶傷上陣只適用「過勞停機」；開刀報銷與禁投期是絕對禁賽，沒有英雄選項 */
-  const hardOut=!!(S.flags.rehab||(S.flags.pitchUnavailableUntilTurn!=null&&S.phase==="hs"&&S.turn<S.flags.pitchUnavailableUntilTurn));
+  const hardOut=!!(S.flags.rehab||(S.flags.pitchUnavailableUntilTurn!=null&&(S.phase==="hs"||S.phase==="grad")&&S.turn<S.flags.pitchUnavailableUntilTurn));
   const heroQualify=S.pos==="P"&&role==="OUT"&&!hardOut&&cfg.mustDecide&&heroCallQualified(cfg);
   if(S.pos==="P"&&role==="OUT"&&hardOut&&cfg.mustDecide){
     sys("醫療紅線：術後／禁投期間絕對禁止登板——這不是能靠意志力解決的事。今天由隊友接管投手丘。");
@@ -2195,19 +2204,22 @@ function startMatch(cfg){
       {label:"聽醫療的，坐在板凳上看完",primary:true,fn:()=>{story("你握緊又鬆開的右手放回了膝蓋上。有些帳，留給未來的自己討。");next("比賽開始！",simulateGame);}},
     ],"這個選擇不會有人替你做。");
   }else if(S.pos==="P"&&role!=="OUT"){
+    const tiredKey=S.armHealth.readiness<60; // 疲勞未消時任何比賽都沒有免費的全力
     const plan=[
-      {label:"普通投｜標準球威・容量約"+cap+"球",primary:true,fn:()=>{setMatchPitchPlan("norm");simulateGame();}},
-      {label:"全力投｜球威提高・手臂負荷×1.28",cls:"risk",fn:()=>{setMatchPitchPlan("full");simulateGame();}},
-      {label:"省力投｜成績折損・手臂負荷×0.76",fn:()=>{setMatchPitchPlan("rest");simulateGame();}}
+      {label:"普通投｜標準球威・容量約"+cap+"球",primary:true,fn:()=>{setMatchPitchPlan("norm");simulateGame();}}
     ];
-    if(cfg.mustDecide&&S.armHealth.readiness<60){
-      plan.splice(1,0,{label:"短休連投・咬牙壓上｜全力球威，但賽後疲勞沉重且恢復減半",cls:"risk",fn:()=>{
+    if(tiredKey){
+      /* 疲勞未消時沒有免費的全力：想硬開就得付連投的債 */
+      plan.push({label:"短休連投・咬牙壓上｜唯一的全力手段：球威全開，但賽後疲勞沉重且恢復減半",cls:"risk",fn:()=>{
         M.overwork=1;setMatchPitchPlan("full");
         story("教練看了看你的手臂，又看了看記分板。「……省著點用。」他把球塞進你手套。");
         simulateGame();
       }});
+    }else{
+      plan.push({label:"全力投｜球威提高・手臂負荷×1.28",cls:"risk",fn:()=>{setMatchPitchPlan("full");simulateGame();}});
     }
-    choices(plan,"手臂："+armStatus()+"（短期可用 "+Math.round(S.armHealth.readiness)+"／長期負荷 "+S.armHealth.load.toFixed(1)+"/"+armCap()+"）"+(cfg.mustDecide&&S.armHealth.readiness<60?"　⚠ 疲勞未消的關鍵戰：連投是選項，代價也是":""));
+    plan.push({label:"省力投｜成績折損・手臂負荷×0.76",fn:()=>{setMatchPitchPlan("rest");simulateGame();}});
+    choices(plan,"手臂："+armStatus()+"（短期可用 "+Math.round(S.armHealth.readiness)+"／長期負荷 "+S.armHealth.load.toFixed(1)+"/"+armCap()+"）"+(tiredKey?"　⚠ 疲勞未消：全力球威只能靠連投換，代價是難消的疲勞債":""));
   }else next("比賽開始！", simulateGame);
 }
 function setMatchPitchPlan(plan){
@@ -2406,6 +2418,7 @@ function myPlateAppearance(inn, foeStr, addP){
     if(behind) S.flags.tClutchBehind=(S.flags.tClutchBehind||0)+1;
     if(lastFrame&&M.scoreUs<=M.scoreThem) S.flags.tSayonara=(S.flags.tSayonara||0)+1;
     if(M.teamScoredThisInning) S.flags.tFollowHit=(S.flags.tFollowHit||0)+1;
+    if(chance(0.5))S.flags.tIn=(S.flags.tIn||0)+1;else S.flags.tOut=(S.flags.tOut||0)+1;
     if(chance(Math.max(0.03,(S.run-5)*0.02)+(hasT("盜壘○")?0.10:0))){
       bat.sb++; S.flags.tSB=(S.flags.tSB||0)+1;
       gameLine("　(跑) 起跑！滑進二壘——盜壘成功！","B");
@@ -3579,12 +3592,12 @@ on(3,6,1,function(){
 
 /* ================= 畢業分歧 ================= */
 function graduationPhase(){
+  S.phase="grad"; // 先離開高中週曆狀態：畢業後的賽事不再套用學業禁賽等校規
   if(S.flags.u18Final&&!S.flags.u18WorldDone){
     S.flags.u18WorldDone=1;
     u18WorldCup(graduationPhase);
     return;
   }
-  S.phase="grad";
   hr();
   head("鳳凰花開", "畢業典禮・"+SCHOOL);
   story("畢業歌唱完，阿誠教練在球員休息區等你，桌上放著幾份文件——你的未來。");
@@ -3616,7 +3629,9 @@ function graduationPhase(){
 
 /* ---- 高三畢業後的九月 U18 世界盃：校隊季結束，國家隊賽績獨立 ---- */
 function u18WorldCup(done){
-  recoverArm(12,true);S.hp=Math.max(S.hp,85);
+  const banActive=S.flags.pitchUnavailableUntilTurn!=null&&S.turn<S.flags.pitchUnavailableUntilTurn;
+  if(banActive){S.hp=Math.max(S.hp,85);sys("醫療團隊隨隊監控：術後禁投期間，你在中華隊"+(S.pos==="P"&&!S.twoWay?"只能擔任觀察名單與精神支柱":"僅以打者身分出賽")+"。");}
+  else{recoverArm(12,true);S.hp=Math.max(S.hp,85);}
   hr();head("九月・U18世界盃","日本沖繩・中華U18代表隊");
   story("高中畢業後，你沒有立刻到新球隊報到。從七月藍白對抗、八月集訓到九月世界盃，這是青棒生涯真正的最後一章。");
   let wins=0;
@@ -3915,6 +3930,12 @@ function signMLB(fromUni){
   proInit("MLB",team,fromUni&&score>=70?"AA":"A",60,{years:3,bonus:bonus,kind:"ROOKIE",prospectScore:score});
 }
 function proInit(league, team, level, salary,contractSpec){
+  if(S.flags.pitchUnavailableUntilTurn!=null){
+    const left=S.flags.pitchUnavailableUntilTurn-S.turn;
+    delete S.flags.pitchUnavailableUntilTurn;
+    if(left>6){S.flags.rehab=1;S.flags.rehabSeasonYear=S.year+1;
+      sys("高中末期的手術復健尚未完成：職業球團接手醫療計畫，新人年將以復健球季展開。");}
+  }
   S.phase="pro"; S.league=league; S.team=team; S.level=level;
   S.salary=salary; S.fatigue=20;
   ensurePlayerSystems(S);S.currentPitchRole=null;recoverArm(8,true);
@@ -4200,7 +4221,7 @@ function proMonthAction(mLabel, monthGames){
   }
   list.push({label:"能力強化（不耗行動）", fn:()=>allocMenu(()=>proMonthAction(mLabel,monthGames)), small:true});
   list.push({label:"個人資料", fn:()=>showProfile(()=>proMonthAction(mLabel,monthGames)), small:true});
-  list.push({label:"存檔", fn:saveMenu, small:true});
+  list.push({label:"存檔", fn:()=>saveMenu(()=>proMonthAction(mLabel,monthGames)), small:true});
   choices(list,"本月的自由時間要怎麼用？（點數可到「能力強化」升能力）");
   function act(f){
     f();statusBar();
@@ -4409,7 +4430,7 @@ function nextGame(){
     {label:"養生調整", fn:()=>playGame("rest",imp,foe)},
     {label:"⏩ 連續10場一般", fn:()=>batchGames("norm"), small:true},
     {label:"⏩ 連續10場養生", fn:()=>batchGames("rest"), small:true},
-    {label:"存檔", fn:saveMenu, small:true},
+    {label:"存檔", fn:()=>saveMenu(nextGame), small:true},
   ], "第"+(s.i+1)+"/"+s.total+"戰 vs "+foe+"　重要度"+"★".repeat(imp)+"　疲勞"+Math.round(S.fatigue)+fatWarn+armWarn+"　目前"+s.tw+"勝"+s.tl+"敗");
 }
 function foeName(){
@@ -4789,6 +4810,7 @@ function seasonEnd(){
       yarukiDn();
     }
   }
+  if(typeof traitProgress==="function")traitProgress(); // 季末統一結算表現系能力（純職業路線的計數不用等國際賽才發）
   if(S.contract){S.contract.level=S.level;syncContractHistory(S.contract);}
   // 去年若拒絕下放：本季必須打回身價，否則「薪水小偷」永久定案
   if(S.flags.demotionRefusalPending){
@@ -4852,7 +4874,7 @@ function defensePositionCheck(done){
   };
   choices([
     {label:"接受調度，轉任"+FIELD_POS_META[dest].n,primary:true,fn:move},
-    {label:"苦練守備，再拚一季（本季仍先轉"+FIELD_POS_META[dest].n+"）",fn:()=>{S.expS+=6;gain("不服輸的加練：敏捷+6");move();}}
+    {label:"苦練守備，再拚一季（加練敏捷+6，疲勞+10）",fn:()=>{S.expS+=6;S.fatigue=Math.min(100,(S.fatigue||0)+10);gain("不服輸的加練：敏捷+6（疲勞+10）");move();}}
   ],"守位門檻＝聯盟基準（中職6.2／日職7.4／美職8.4）＋守位溢價－年齡寬限。");
   return true;
 }
@@ -5047,6 +5069,10 @@ function postseasonOpponent(rule){
   return pool[Math.floor(pr()*pool.length)];
 }
 function postSeason(rank,goodSeason,rating,seasonLevel){
+  if(S.flags.rehab){
+    sys("復健球季：球團依醫療建議將你排除於季後賽名單之外——十月的球場，你在復健室看轉播。");
+    offSeason(goodSeason,rating,false);return;
+  }
   const playedLevel=seasonLevel||S.level;
   // 用本季實際層級判定：二軍／小聯盟球季不會因季末升格而誤闖頂級季後賽。
   if(!topServiceLevel(S.league,playedLevel)){
@@ -5662,6 +5688,10 @@ function intlQualify(e){
   return true;
 }
 function pickIntl(){
+  if(S.flags.rehab){
+    if(S.fame>=18&&!S.flags["intlMiss"+S.year]){S.flags["intlMiss"+S.year]=1;sys("（國家隊名單公布——復健中的你以醫療證明豁免本屆徵召，義務年限順延。）");}
+    return null;
+  }
   const evts=intlEvents().sort((a,b)=>b.tier-a.tier);
   for(const e of evts){ if(intlQualify(e)) return e; }
   // 有賽事但沒入選：給落選訊息（有點知名度才顯示）
@@ -5725,6 +5755,7 @@ function intlTournamentBody(evt, done){
       {label:"一般出賽", fn:()=>ig("norm")},
     ], evt.name+" 預賽第"+g+"戰 vs "+foe+"　重要度"+"★".repeat(evt.tier));
     function ig(c){
+      if(c==="full")S.fatigue=Math.min(100,(S.fatigue||0)+4);
       const win=chance(Math.max(0.12,Math.min(0.88,0.45+(overall()-50)*0.004+(c==="full"?0.06:0)+
         traitGameEdge({international:true,keyGame:evt.tier>=2,batting:S.pos==="B"||S.twoWay}))));
       const statLine=recordQuickEvent({
