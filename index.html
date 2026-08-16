@@ -729,14 +729,14 @@ const TRAIT_ORDER=Object.keys(TRAIT_META);
 /* 每個特殊能力的取得條件（圖鑑用；所有能力都必須真的能在遊戲內觸發） */
 const ABIL_HOW={
   "受傷○":"「跑步」或「伸展保養」練滿里程碑次數",
-  "衝擊力":"「重量訓練」練滿里程碑次數",
-  "推打":"「素振」練滿里程碑次數",
-  "內野安打○":"「衝刺跑壘」練滿里程碑次數",
-  "纏鬥打擊":"「打擊籠特打」練滿里程碑次數",
-  "守備職人":"「守備接球」練滿里程碑次數",
-  "危機○":"「牛棚投球」練滿里程碑次數（廟口上上籤也可能賜予）",
-  "低球○":"「姿勢矯正」練滿里程碑次數",
-  "釋球○":"「變化球研究」練滿里程碑次數",
+  "衝擊力":"「重量訓練」系練滿里程碑且力量達110（次數延續到大學與職業）",
+  "推打":"「素振」練滿里程碑且接觸達8（次數延續到大學與職業）",
+  "內野安打○":"「衝刺跑壘」練滿里程碑且跑力達9（次數延續到大學與職業）",
+  "纏鬥打擊":"「打擊籠特打」系練滿里程碑且接觸達7（次數延續到大學與職業）",
+  "守備職人":"「守備接球」練滿里程碑且守備達9（次數延續到大學與職業）",
+  "危機○":"「牛棚投球」系練滿里程碑且控球達110（次數延續到大學與職業）",
+  "低球○":"「姿勢矯正」練滿里程碑且控球達100（次數延續到大學與職業）",
+  "釋球○":"「變化球研究」練滿里程碑且變化總量達8格（次數延續到大學與職業）",
   "センス○":"學業累積到60以上時讀書頓悟",
   "機會○":"廟口抽中上上籤",
   "選球眼":"廟口上上籤（野手）",
@@ -840,8 +840,37 @@ const AWARD_NAMES={
 };
 function awardName(kind,league){ return (AWARD_NAMES[kind]||{})[league||S.league]||kind; }
 function practiceMilestoneAt(state){
+  /* 訓練計數延續至大學與職業後，基準改 30（天才-6、天生怪物-3，底線15） */
   state=state||S;const t=state&&state.traits||{};
-  return Math.max(10,20-(t.genius?4:0)-(t.monster?2:0));
+  return Math.max(15,30-(t.genius?6:0)-(t.monster?3:0));
+}
+/* 里程碑能力的身體條件門檻：次數練滿還不夠，數值也要跟上 */
+const ABIL_REQ={
+  "危機○":{ok:()=>S.ctrl>=110,txt:"控球達110（C級）"},
+  "低球○":{ok:()=>S.ctrl>=100,txt:"控球達100"},
+  "釋球○":{ok:()=>currentPotentialFloor(S,"breakTotal")>=8,txt:"變化球總量達8格"},
+  "衝擊力":{ok:()=>S.power>=110,txt:"力量達110（C級）"},
+  "推打":{ok:()=>S.meet>=8,txt:"接觸達8（C級）"},
+  "內野安打○":{ok:()=>S.run>=9,txt:"跑力達9"},
+  "纏鬥打擊":{ok:()=>S.meet>=7,txt:"接觸達7"},
+  "守備職人":{ok:()=>S.fld>=9,txt:"守備達9"}
+};
+function abilReqMet(name){ const r=ABIL_REQ[name]; return !r||r.ok(); }
+function abilReqText(name){ const r=ABIL_REQ[name]; return r?r.txt:""; }
+function practiceMilestoneTick(kind){
+  /* 高中週練、大學年課表與職業月行動共用的訓練計數與里程碑判定 */
+  ensurePlayerSystems();
+  S.pCount[kind]=(S.pCount[kind]||0)+1;
+  S.traitCounters.yearPractice[kind]=(S.traitCounters.yearPractice[kind]||0)+1;
+  const r=P40_REWARD[kind];
+  if(!r||S.abil.includes(r))return;
+  if(S.pCount[kind]>=practiceMilestoneAt()){
+    if(abilReqMet(r)){ ev("這項訓練的累積終於開花——"); addAbil(r); }
+    else if(!S.flags["reqHint_"+r]){
+      S.flags["reqHint_"+r]=1;
+      sys("【"+r+"】的訓練量已經足夠，但身體條件還差一步（需"+abilReqText(r)+"）。數值達標後會自動習得。");
+    }
+  }
 }
 function blankTraits(){ const o={}; Object.keys(TRAIT_META).forEach(k=>o[k]=false); return o; }
 function blankArm(){ return {load:0,readiness:100,lastPitches:0,crises:0,surgeries:0,injections:0,injectStreak:0,effort:"norm",lastPitchYear:null,lastPitchTurn:null}; }
@@ -1718,7 +1747,8 @@ function actionMenu(){
     if(d.tough)parts.push("韌+"+d.tough);
     const cnt=S.pCount[kind]||0;
     const mAt=practiceMilestoneAt();
-    const prog = (cnt<mAt&&P40_REWARD[kind])? "・"+cnt+"/"+mAt+"→"+P40_REWARD[kind] : "";
+    const rw=P40_REWARD[kind];
+    const prog = (rw&&!S.abil.includes(rw))? ("・"+Math.min(cnt,mAt)+"/"+mAt+"→"+rw+(cnt>=mAt&&!abilReqMet(rw)?"（待"+abilReqText(rw)+"）":"")) : "";
     return name+"｜"+parts.join(" ")+prog;
   };
   if(S.pos==="B"||S.twoWay){
@@ -1828,13 +1858,8 @@ function practiceWith(kind,tier){
   if(d.tough){ S.tough=Math.min(20,S.tough+d.tough); }
   if(chance(0.55)){ S.evCoach=Math.min(99,S.evCoach+1); }
   gain(msg+"（體力"+(kind==="str"?"+":"-")+Math.abs(kind==="str"?10-cost:cost)+"）");
-  S.pCount[kind]=(S.pCount[kind]||0)+1;
-  S.traitCounters.yearPractice[kind]=(S.traitCounters.yearPractice[kind]||0)+1;
+  practiceMilestoneTick(kind);
   if(S.age<25&&S.traitCounters.careActions>=18)unlockTrait("disc","25歲前累積18次主動保養／充分休息");
-  if(S.pCount[kind]>=practiceMilestoneAt()){
-    const r=P40_REWARD[kind];
-    if(r&&!S.abil.includes(r)){ ev("這項練習累積了足夠的次數，身體記住了什麼——"); addAbil(r); }
-  }
   if(S.yaruki===4) sys("絕好調！練習效果大幅提升！");
   if(throwing&&resolveArmCrisis(afterAction,{forced:false}))return;
   afterAction();
@@ -3972,6 +3997,10 @@ function uniYear(){
     {label:"以學業為重", fn:()=>uniTrain(0.7,16)},
   ],"這一年的重心？");
   function uniTrain(mult, st){
+    /* 大學一年折算數次主項訓練計數（特訓年4次、均衡3次、學業年2次） */
+    const reps=mult>=1.3?4:mult>=1.0?3:2;
+    const kinds=S.pos==="P"?["nage","henka","kin","str"]:["toss","kin","dash","str"];
+    for(let i=0;i<reps;i++)practiceMilestoneTick(kinds[i%kinds.length]);
     const m=spGain(Math.round(20*mult),Math.round(18*mult),Math.round(16*mult));
     S.study=Math.min(100,S.study+st);
     gain("年度成長："+m+(st?("　學業+"+st):""));
@@ -4237,12 +4266,12 @@ function proMonthAction(mLabel, monthGames){
   if(S.goal) sys("📋 教練課題：「"+S.goal.txt+"」（達成獎勵：點數＋知名度）");
   const list=[];
   if(S.pos==="B"||S.twoWay)
-    list.push({label:(S.twoWay?"【打】":"")+"特打加練｜筋6技8敏4・疲勞+"+(S.twoWay?8:6), fn:()=>act(()=>{ const f=S.twoWay?8:6,m=spGain(6,8,4); S.fatigue=Math.min(100,S.fatigue+f); gain(m+"（疲勞+"+f+"）"); })});
+    list.push({label:(S.twoWay?"【打】":"")+"特打加練｜筋6技8敏4・疲勞+"+(S.twoWay?8:6), fn:()=>act(()=>{ const f=S.twoWay?8:6,m=spGain(6,8,4); S.fatigue=Math.min(100,S.fatigue+f); practiceMilestoneTick("toss"); gain(m+"（疲勞+"+f+"）"); })});
   if(S.pos==="P")
-    list.push({label:(S.twoWay?"【投】":"")+"牛棚加投｜筋5技8變5・疲勞+"+(S.twoWay?8:6)+"・手臂負荷+", fn:()=>act(()=>{ const f=S.twoWay?8:6,m=spGain(5,8,5),a=addArmLoad(35,"norm",0.8); S.fatigue=Math.min(100,S.fatigue+f); gain(m+"（疲勞+"+f+"、手臂負荷+"+a.toFixed(1)+"）"); })});
-  list.push({label:"重量訓練｜筋10 變/敏3・疲勞+5", fn:()=>act(()=>{ const m=spGain(10,0,3); S.fatigue=Math.min(100,S.fatigue+5); gain(m+"（疲勞+5）"); })});
-  list.push({label:"影片研究對手"+(S.flags.analyst?"（小黑加成）":""), fn:()=>act(()=>{ S.sea.monthPerf=S.flags.analyst?0.09:0.06; S.expG+=6; gain("技術+6　本月比賽表現+"+(S.flags.analyst?"+（小黑的逐格分析！）":"（研究奏效）")); })});
-  list.push({label:"徹底保養", fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); if(S.pos==="P"){recoverArm(7,true);S.traitCounters.careActions++;} gain("疲勞-22、體力+20"+(S.pos==="P"?"、手臂回復":"")); })});
+    list.push({label:(S.twoWay?"【投】":"")+"牛棚加投｜筋5技8變5・疲勞+"+(S.twoWay?8:6)+"・手臂負荷+", fn:()=>act(()=>{ const f=S.twoWay?8:6,m=spGain(5,8,5),a=addArmLoad(35,"norm",0.8); S.fatigue=Math.min(100,S.fatigue+f); practiceMilestoneTick("nage"); gain(m+"（疲勞+"+f+"、手臂負荷+"+a.toFixed(1)+"）"); })});
+  list.push({label:"重量訓練｜筋10 變/敏3・疲勞+5", fn:()=>act(()=>{ const m=spGain(10,0,3); S.fatigue=Math.min(100,S.fatigue+5); practiceMilestoneTick("kin"); gain(m+"（疲勞+5）"); })});
+  list.push({label:"影片研究對手"+(S.flags.analyst?"（小黑加成）":""), fn:()=>act(()=>{ S.sea.monthPerf=S.flags.analyst?0.09:0.06; S.expG+=6; practiceMilestoneTick(S.pos==="P"?"henka":"knock"); gain("技術+6　本月比賽表現+"+(S.flags.analyst?"+（小黑的逐格分析！）":"（研究奏效）")); })});
+  list.push({label:"徹底保養", fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); if(S.pos==="P"){recoverArm(7,true);S.traitCounters.careActions++;} practiceMilestoneTick("str"); gain("疲勞-22、體力+20"+(S.pos==="P"?"、手臂回復":"")); })});
   if(S.gf||S.married){
     list.push({label:S.married?"陪伴家人":"與"+GF[S.gf].name+"約會", fn:()=>act(()=>{ yarukiUp(2); S.fatigue=Math.max(0,S.fatigue-12); gain("狀態+2、疲勞-12（心的充電）"); })});
   }
