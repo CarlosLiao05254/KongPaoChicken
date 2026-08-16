@@ -4190,12 +4190,39 @@ function evalGoal(){
   }
   S.goal=null;
 }
+function provisionalSeasonRating(s){
+  const avg=s.ab? s.h/s.ab:0, era=s.ip? s.er*9/s.ip:99;
+  const batR=s.ab?avg*200+s.hr*0.8:0;
+  const pitR=s.ip?Math.max(0,60-era*8+s.w*1.5+s.sv*0.9+s.hld*0.35):0;
+  return S.twoWay?(batR+pitR)*0.65:S.pos==="B"?batR:pitR;
+}
+function midSeasonCallup(){
+  /* 打爆農場不用等季末：月結時表現達標即有機會被拉上去（每季至多一次） */
+  if(S.level==="一軍"||S.level==="MLB")return false;
+  const s=S.sea;if(!s||s.i<12||s.midCallup||S.flags.rehab)return false;
+  const rating=provisionalSeasonRating(s);
+  const need=S.league==="MLB"?52:48;
+  if(rating<need||!chance(0.55))return false;
+  const nextLv={二軍:"一軍",A:"AA",AA:"AAA",AAA:"MLB"}[S.level];
+  if(!nextLv)return false;
+  s.midCallup={game:s.i,from:S.level,to:nextLv};
+  hr();head("升格通知",S.team+"・人事異動");
+  extra("季中升上"+nextLv+"！！");
+  story("農場總監把你叫進辦公室，桌上放著一張機票（或一張一軍登錄名單）。「收拾東西。上面要你——現在。」置物櫃還沒坐熱，但這正是你來這裡的目的。");
+  S.level=nextLv;
+  if(S.contract){S.contract.level=nextLv;syncContractHistory(S.contract);}
+  sys("本季剩餘賽程改以"+nextLv+"出賽；逐場統計會記在對應層級。年度獎項資格以佔本季多數的層級認定。");
+  yarukiUp(2);S.fame+=4;
+  statusBar();
+  return true;
+}
 function monthStep(){
   const s=S.sea;
   evalGoal();
   if(s.i>=s.total){ seasonEnd(); return; }
   s.mi++;
   assignGoal();
+  midSeasonCallup();
   const monthGames=Math.min(Math.ceil(s.total/SEASON_MONTHS.length), s.total-s.i);
   s.nextPause=s.i+monthGames;
   const mNum=Number(SEASON_MONTHS[Math.min(s.mi-1,SEASON_MONTHS.length-1)]);
@@ -4738,7 +4765,8 @@ function resolveSeasonAwards(s,rating,seasonLevel){
 }
 function seasonEnd(){
   const s=S.sea;
-  const seasonLevel=S.level;
+  let seasonLevel=S.level;
+  if(s.midCallup&&s.midCallup.game>s.total*0.4)seasonLevel=s.midCallup.from; // 季中升格太晚：年度資格以佔多數的農場層級認定
   hr();
   const avg = s.ab? (s.h/s.ab):0;
   const era = s.ip? (s.er*9/s.ip):99;
