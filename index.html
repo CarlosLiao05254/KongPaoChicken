@@ -2170,10 +2170,14 @@ function startMatch(cfg){
   sys("球探情報：對手強度"+cfg.foeStr+"/9・"+handTxt(fp.hand)+"投・"+fp.type
     +(S.pos==="P"&&role!=="OUT"?("　你："+pitchRoleLabel(role)+"（容量約"+cap+"球）"):"")
     +(S.pos!=="P"||S.twoWay?(adv?"　左右對決有利":""):""));
-  const heroQualify=S.pos==="P"&&role==="OUT"&&cfg.mustDecide&&heroCallQualified(cfg);
+  /* 帶傷上陣只適用「過勞停機」；開刀報銷與禁投期是絕對禁賽，沒有英雄選項 */
+  const hardOut=!!(S.flags.rehab||(S.flags.pitchUnavailableUntilTurn!=null&&S.phase==="hs"&&S.turn<S.flags.pitchUnavailableUntilTurn));
+  const heroQualify=S.pos==="P"&&role==="OUT"&&!hardOut&&cfg.mustDecide&&heroCallQualified(cfg);
+  if(S.pos==="P"&&role==="OUT"&&hardOut&&cfg.mustDecide){
+    sys("醫療紅線：術後／禁投期間絕對禁止登板——這不是能靠意志力解決的事。今天由隊友接管投手丘。");
+  }
   if(heroQualify){
-    const inRehab=!!(S.flags.rehab||(S.flags.pitchUnavailableUntilTurn!=null&&S.phase==="hs"&&S.turn<S.flags.pitchUnavailableUntilTurn));
-    const baseRisk=(inRehab?0.35:0.22)*(S.traits.gutsy?0.5:1)*traitInjuryMult();
+    const baseRisk=0.22*(S.traits.gutsy?0.5:1)*traitInjuryMult();
     hr();head("板凳旁的對話","醫療報告 vs. 輸了就結束的比賽");
     story("你被醫療組列為不可登板。但比賽走到這裡，牛棚已經空了。教練蹲到你面前，聲音壓得很低：「數據我看過，你是我們最好的牌。……我只問一次——上，還是不上？沒有人會怪你。」");
     sys("帶傷登板風險評估：韌帶斷裂機率約 "+Math.round(baseRisk*100)+"%（斷裂＝立即手術、本季報銷）。撐住則有大量成長與只屬於你的故事。");
