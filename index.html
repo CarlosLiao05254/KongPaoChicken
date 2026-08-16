@@ -454,6 +454,8 @@ function ensurePotentialCaps(state){
     const old=Number(state.potential[key]),floor=currentPotentialFloor(state,key),fresh=generated[key];
     state.potential[key]=Math.max(floor,Number.isFinite(old)?Math.round(old):fresh);
   });
+  /* 變化球個人潛力帽取消：上限＝18＋天才2＋天生怪物1（物理極限21，含舊檔自動遷移） */
+  state.potential.breakTotal=breakHardCap(state);
   return state.potential;
 }
 function potentialCap(key,state){
@@ -475,9 +477,13 @@ function potentialText(key,state){
   return rank+" "+v;
 }
 const ABILITY_HARD_CAP={velo:168,ctrl:255,stam:255,traj:4,meet:15,power:255,run:15,arm:15,fld:15,breakTotal:18};
+function breakHardCap(state){
+  state=state||S;const t=state&&state.traits||{};
+  return Math.min(21,18+(t.genius?2:0)+(t.monster?1:0)); // 3球種×Lv7=21 是物理極限
+}
 function playerAbilityCap(key,state){
   state=state||S;
-  const hard=ABILITY_HARD_CAP[key];
+  const hard=key==="breakTotal"?breakHardCap(state):ABILITY_HARD_CAP[key];
   /* 早期版本可能曾練出高於現行硬上限的值；相容邏輯只禁止再長，絕不把舊值往下壓。 */
   return Math.max(currentPotentialFloor(state,key),Math.min(Number.isFinite(hard)?hard:Infinity,potentialCap(key,state)));
 }
@@ -585,6 +591,7 @@ function renderAbilityGradeGuide(){
 function moodName(m){ return ["低迷 ▽▽","不振 ▽","普通","狀況佳 △","絕好調 △△"][m]; }
 function moodMod(){
   let m=[0.7,0.85,1.0,1.15,1.3][S.yaruki];
+  if(S.abil&&S.abil.includes("大起大落"))m=1+(m-1)*1.4;
   if(S.ailments.includes("低潮")) m*=0.85;
   if(S.ailments.includes("失眠")) m*=0.9;
   if(S.ailments.includes("腰痛")) m*=0.92;
@@ -598,6 +605,17 @@ function rollSeasonDice(title){
   const faces=["","⚀","⚁","⚂","⚃","⚄","⚅"];
   const d={grow:ri(1,6),health:ri(1,6),win:ri(1,6),fame:ri(1,6),lucky:ri(1,6)};
   S.dice=d;
+  if(S.abil.includes("開幕衝刺")&&S.yaruki<3){S.yaruki=3;sys("開幕衝刺：新球季的引擎一發就著——狀態直上「狀況佳」。");}
+  if(d.health===6&&chance(0.5)){
+    const pool=["開幕衝刺","夏男","秋之男"].filter(a=>!S.abil.includes(a));
+    if(pool.length){ev("健康運全開的身體記住了節奏——");addAbil(pick(pool));}
+  }
+  if(d.win<=1&&d.lucky<=1&&chance(0.4)){
+    const badPool=(S.pos==="P"?["大起大落","慢熱"]:["大起大落"]).filter(a=>!S.abil.includes(a));
+    if(badPool.length){const b=pick(badPool);addAbil(b);loss("厄運在身上留下了印記——【"+b+"】（負面／雙面能力）");}
+  }
+  S.flags.noSlumpYears=(S.yaruki>=1&&!S.ailments.includes("低潮"))?(S.flags.noSlumpYears||0)+1:0;
+  if(S.flags.noSlumpYears>=3&&!S.abil.includes("不動如山")){ev("三個球季不曾迷失自己——");addAbil("不動如山");}
   const total=d.grow+d.health+d.win+d.fame+d.lucky;
   let rv='<table class="career"><tr><th colspan="5">🎲 '+esc(title||"開季運勢擲骰")+'（總和 '+total+'／30）</th></tr>'
     +'<tr><td>成長運<br>'+faces[d.grow]+' '+d.grow+'</td><td>健康運<br>'+faces[d.health]+' '+d.health+'</td><td>勝負運<br>'+faces[d.win]+' '+d.win+'</td><td>人氣運<br>'+faces[d.fame]+' '+d.fame+'</td><td>機遇運<br>'+faces[d.lucky]+' '+d.lucky+'</td></tr></table>';
@@ -651,6 +669,23 @@ function spGain(k,t,s){
   const parts=[]; if(k)parts.push("筋力+"+k); if(t)parts.push("技術+"+t); if(s)parts.push(sName+"+"+s);
   return parts.join("　");
 }
+function noteStyleChoice(tier){
+  /* 全遊戲三檔選擇的風格累計：怎麼玩，遊戲就給你貼什麼標（互斥） */
+  ensurePlayerSystems();S.flags.styleSafe=S.flags.styleSafe||0;S.flags.styleStd=S.flags.styleStd||0;S.flags.styleAllin=S.flags.styleAllin||0;
+  if(tier==="safe")S.flags.styleSafe++;else if(tier==="allin")S.flags.styleAllin++;else S.flags.styleStd++;
+  const hasStyle=S.abil.includes("積極派")||S.abil.includes("慎重派")||S.abil.includes("平常心");
+  if(hasStyle)return;
+  if(S.flags.styleAllin>=15){ev("你的人生哲學已經寫在臉上——");addAbil("積極派");sys("梭哈成功率+5%");}
+  else if(S.flags.styleSafe>=25){ev("穩健是一種天賦——");addAbil("慎重派");sys("保守檔成功率+8%、收益×1.25");}
+  else if(S.flags.styleStd>=30){ev("不多不少，剛剛好——");addAbil("平常心");sys("標準檔成功率+5%");}
+}
+function styleSuccessBonus(tier){
+  if(!S||!S.abil)return 0;
+  if(tier==="allin"&&S.abil.includes("積極派"))return 0.05;
+  if(tier==="safe"&&S.abil.includes("慎重派"))return 0.08;
+  if(tier==="std"&&S.abil.includes("平常心"))return 0.05;
+  return 0;
+}
 function addAbil(name){
   if(S.abil.includes(name)) return false;
   S.abil.push(name); gain("習得特殊能力【"+name+"】！");
@@ -691,6 +726,64 @@ const TRAIT_META={
   monster:{n:"天生怪物",kind:"good",fx:"天選印記：往後每年開季自帶好狀態",how:"開季能力骰擲出三顆6全開"}
 };
 const TRAIT_ORDER=Object.keys(TRAIT_META);
+/* 每個特殊能力的取得條件（圖鑑用；所有能力都必須真的能在遊戲內觸發） */
+const ABIL_HOW={
+  "受傷○":"「跑步」或「伸展保養」練滿里程碑次數",
+  "衝擊力":"「重量訓練」練滿里程碑次數",
+  "推打":"「素振」練滿里程碑次數",
+  "內野安打○":"「衝刺跑壘」練滿里程碑次數",
+  "纏鬥打擊":"「打擊籠特打」練滿里程碑次數",
+  "守備職人":"「守備接球」練滿里程碑次數",
+  "危機○":"「牛棚投球」練滿里程碑次數（廟口上上籤也可能賜予）",
+  "低球○":"「姿勢矯正」練滿里程碑次數",
+  "釋球○":"「變化球研究」練滿里程碑次數",
+  "センス○":"學業累積到60以上時讀書頓悟",
+  "機會○":"廟口抽中上上籤",
+  "選球眼":"廟口上上籤（野手）",
+  "拉打王":"比賽中拉打方向安打累積6支",
+  "推打達人":"推打方向安打累積6支",
+  "內角剋星":"吃下內角球安打累積8支",
+  "外角剋星":"外角球安打累積8支",
+  "左投剋星":"對左投安打累積6支",
+  "鷹眼":"精準選球（四壞/纏鬥）累積14次",
+  "速差魔術師":"速差配球三振累積10次",
+  "配球師":"配球連攜三振累積22次",
+  "雙殺製造機":"誘導雙殺累積5次",
+  "內角職人":"配球取樣40球以上且六成攻內角",
+  "外角職人":"配球取樣40球以上且六成攻外角",
+  "左打者殺手":"左投對左打三振累積10次",
+  "火線交叉":"左投對右打內角三振累積8次",
+  "逆境○":"落後局面敲出安打累積8支",
+  "再見男":"延長賽或最終局的致勝安打累積2支",
+  "盜壘○":"盜壘成功累積8次",
+  "廣角打法":"同時持有「拉打王」與「推打達人」",
+  "威壓感":"知名度120以上且力量達A級（打者）",
+  "尾勁○":"單場雙位數三振累積2場",
+  "重球":"單季被全壘打壓在極低（結算時判定）",
+  "逃球":"控球達160後的投球智慧",
+  "完投體質":"完投比賽累積3場",
+  "鬼氣逼人":"生涯救援成功累積20次",
+  "冷面投手":"低迷狀態下仍投出優質內容累積2場",
+  "回復○":"主動保養累積30次的身體管理",
+  "開幕衝刺":"開季骰健康運擲出6時有機率獲贈（季節系隨機）",
+  "夏男":"開季骰健康運擲出6時有機率獲贈（季節系隨機）",
+  "秋之男":"開季骰健康運擲出6時有機率獲贈（季節系隨機）",
+  "不動如山":"連續三年狀態未跌入低迷",
+  "大起大落":"開季骰勝負運與機遇運同時擲出1時可能沾上（壞印記）",
+  "手感火燙":"單場三安打累積3場",
+  "再來一發":"單場雙響砲累積2場",
+  "接棒者":"隊友先馳得點的半局跟進安打累積8支",
+  "大舞台":"國際賽與淘汰戰累積出賽10場",
+  "人氣者":"知名度達80自動獲得",
+  "氣氛製造機":"泰雅、阿海、小黑三條羈絆全部達成",
+  "越投越順":"先發勝投累積10場",
+  "慢熱":"開季骰勝負運與機遇運同時擲出1時可能沾上（投手壞印記）",
+  "暴力直球":"球速150以上但控球低於100時自動覺醒（雙面）",
+  "泰然自若":"持有冷面投手且經歷動搖6次後習慣壓力",
+  "積極派":"全遊戲「梭哈」選擇累積15次（與慎重派/平常心互斥）",
+  "慎重派":"全遊戲「保守」選擇累積25次（互斥）",
+  "平常心":"全遊戲「標準」選擇累積30次（互斥）"
+};
 const ABIL_META={
   "受傷○":"練習與職業賽受傷風險下降","衝擊力":"強拉與長打機率上升","推打":"順推安打機率上升",
   "內野安打○":"腳程型內野安打增加、雙殺風險下降","纏鬥打擊":"每打席用球增加、三振下降","守備職人":"守備成功率與失分阻止提高",
@@ -699,7 +792,19 @@ const ABIL_META={
   "拉打王":"拉打安打與長打提高","推打達人":"順推安打率提高","內角剋星":"對內角球打擊提高","外角剋星":"對外角球打擊提高",
   "左投剋星":"對左投打擊提高","鷹眼":"選球與保送率提高","速差魔術師":"速差配球三振率提高","配球師":"配球連攜全面強化",
   "雙殺製造機":"滾地雙殺誘發率提高","內角職人":"內角系投球威力提高","外角職人":"外角系投球威力提高",
-  "左打者殺手":"左投對左打壓制提高","火線交叉":"左投對右打內角速球提高"
+  "左打者殺手":"左投對左打壓制提高","火線交叉":"左投對右打內角速球提高",
+  "逆境○":"球隊落後時打擊大幅提升","再見男":"延長賽與最終局的關鍵打席強化","盜壘○":"盜壘成功率大幅提高",
+  "廣角打法":"拉推自如，左右對決劣勢減半","威壓感":"對方投手面對你更容易失投",
+  "尾勁○":"直球尾勁：三振率提高","重球":"被強拉扛出牆的機率下降","逃球":"失投時的傷害減輕",
+  "完投體質":"球數容量提高12%","鬼氣逼人":"短局數登板的壓制力提高","冷面投手":"狀態低迷不影響投球內容",
+  "回復○":"手臂恢復效率提高20%",
+  "開幕衝刺":"每年開季狀態至少「狀況佳」起步","夏男":"夏季月份進場自動提振狀態","秋之男":"秋季月份進場自動提振狀態",
+  "不動如山":"狀態波動減半、低潮自然痊癒快","大起大落":"狀態波動加倍，但絕好調時爆發力更強（壞印記）",
+  "手感火燙":"單場兩安後的打席大幅強化","再來一發":"開轟後的下一打席繼續強化","接棒者":"隊友先得分的半局更容易跟進",
+  "大舞台":"國際賽・淘汰戰・冠軍舞台全面強化","人氣者":"勝利與季末的知名度收益增加","氣氛製造機":"全隊攻擊小幅提升",
+  "越投越順":"先發第5局起球威遞增","慢熱":"開賽前2局球威下降（壞印記）","暴力直球":"三振率提高但保送率也提高（雙面）",
+  "泰然自若":"完全免疫動搖狀態",
+  "積極派":"梭哈成功率+5%","慎重派":"保守檔成功率+8%且收益×1.25","平常心":"標準檔成功率+5%"
 };
 /* ---- 高中層級（隱藏強度分級） ---- */
 const HS_TIER1=["北都工商","平鎮高中","穀保家商","高苑工商","興大附農","西苑高中"];
@@ -734,6 +839,10 @@ const AWARD_NAMES={
   hldKing:{CPBL:"中繼王",NPB:"最優秀中繼",MLB:"中繼王"}
 };
 function awardName(kind,league){ return (AWARD_NAMES[kind]||{})[league||S.league]||kind; }
+function practiceMilestoneAt(state){
+  state=state||S;const t=state&&state.traits||{};
+  return Math.max(10,20-(t.genius?4:0)-(t.monster?2:0));
+}
 function blankTraits(){ const o={}; Object.keys(TRAIT_META).forEach(k=>o[k]=false); return o; }
 function blankArm(){ return {load:0,readiness:100,lastPitches:0,crises:0,surgeries:0,injections:0,injectStreak:0,effort:"norm",lastPitchYear:null,lastPitchTurn:null}; }
 function ensurePlayerSystems(state){
@@ -802,8 +911,8 @@ function traitFailureLossMultiplier(kind){
   if(kind==="relationship"&&S.traits.scum)m*=1.5;
   return m;
 }
-const PITCH_ABIL=new Set(["受傷○","危機○","低球○","釋球○","速差魔術師","配球師","雙殺製造機","內角職人","外角職人","左打者殺手","火線交叉"]);
-const BAT_ABIL=new Set(["受傷○","衝擊力","推打","內野安打○","纏鬥打擊","守備職人","センス○","機會○","選球眼","拉打王","推打達人","內角剋星","外角剋星","左投剋星","鷹眼"]);
+const PITCH_ABIL=new Set(["受傷○","危機○","低球○","釋球○","速差魔術師","配球師","雙殺製造機","內角職人","外角職人","左打者殺手","火線交叉","尾勁○","重球","逃球","完投體質","鬼氣逼人","冷面投手","回復○","越投越順","泰然自若","大舞台"]);
+const BAT_ABIL=new Set(["受傷○","衝擊力","推打","內野安打○","纏鬥打擊","守備職人","センス○","機會○","選球眼","拉打王","推打達人","內角剋星","外角剋星","左投剋星","鷹眼","逆境○","再見男","盜壘○","廣角打法","威壓感","手感火燙","再來一發","接棒者","大舞台","氣氛製造機"]);
 function relevantAbilCount(side){ const set=side==="P"?PITCH_ABIL:BAT_ABIL;return S.abil.reduce((n,a)=>n+(set.has(a)?1:0),0); }
 function armCap(){ return S&&S.traits&&S.traits.rubber?180:100; }
 function armStatus(){
@@ -840,6 +949,7 @@ function pitcherCapacity(role,choice){
   role=role||recommendPitchRole();choice=choice||"norm";
   const ready=Math.max(0.52,Math.min(1,S.armHealth.readiness/85));
   let cap=role==="SP"?66+Math.max(0,S.stam-110)*0.38:22+S.stam*0.13;
+  if(S.abil&&S.abil.includes("完投體質"))cap*=1.12;
   cap*=ready*(choice==="full"?1.08:choice==="rest"?0.76:1);
   return Math.max(role==="SP"?55:18,Math.min(role==="SP"?122:58,Math.round(cap)));
 }
@@ -865,8 +975,8 @@ function addArmLoad(pitches,choice,mult){
 function recoverArm(units,deep){
   ensurePlayerSystems();units=Math.max(0,Number(units)||0);
   const sta=Math.min(4,S.stam/70),disc=S.traits.disc?1.2:1;
-  let over=1;
-  if((S.flags.armOveruse||0)>0){ over=0.5; S.flags.armOveruse--; } // 連投的債：恢復減半直到還完
+  let over=S.abil&&S.abil.includes("回復○")?1.2:1;
+  if((S.flags.armOveruse||0)>0){ over*=0.5; S.flags.armOveruse--; } // 連投的債：恢復減半直到還完
   S.armHealth.readiness=Math.min(100,S.armHealth.readiness+(units*(7+sta)*disc+(deep?18:0))*over);
   S.armHealth.load=Math.max(0,S.armHealth.load-units*(deep?1.8:0.18)*over);
 }
@@ -943,9 +1053,13 @@ function renderTraitsHTML(){
   h+='</table></details>';return h;
 }
 function renderAbilitiesHTML(){
-  if(!S.abil.length)return '<span class="sys">（尚無球場特殊能力）</span>';
-  return '<div class="trait-wrap">'+S.abil.map(a=>'<span class="trait-tag ability" title="'+esc(ABIL_META[a]||"球場表現加成")+'">'+esc(a)+'</span>').join(' ')+'</div>'
-    +'<table class="career"><tr><th>特殊能力</th><th>實際效果</th></tr>'+S.abil.map(a=>'<tr><td>'+esc(a)+'</td><td style="text-align:left">'+esc(ABIL_META[a]||"依比賽情境提供加成")+'</td></tr>').join('')+'</table>';
+  let h=S.abil.length?('<div class="trait-wrap">'+S.abil.map(a=>'<span class="trait-tag ability" title="'+esc(ABIL_META[a]||"球場表現加成")+'">'+esc(a)+'</span>').join(' ')+'</div>')
+    :'<span class="sys">（尚無球場特殊能力）</span>';
+  const keys=Object.keys(ABIL_META);
+  h+='<details class="trait-book"><summary>查看完整 '+keys.length+' 種特殊能力圖鑑與取得條件</summary><table class="career"><tr><th>狀態</th><th>能力</th><th>效果</th><th>取得方式</th></tr>';
+  keys.forEach(a=>{const on=S.abil.includes(a);
+    h+='<tr class="'+(on?'trait-on':'trait-locked')+'"><td>'+(on?'已取得':'未取得')+'</td><td>'+esc(a)+'</td><td style="text-align:left">'+esc(ABIL_META[a])+'</td><td style="text-align:left">'+esc(ABIL_HOW[a]||"—")+'</td></tr>';});
+  h+='</table></details>';return h;
 }
 /* 綜合戰力（0-100，職業期模擬用） */
 function ovP(){ const bk=Object.values(S.breaks).reduce((a,b)=>a+b,0); return Math.min(100, Math.max(0,Math.round((S.velo-115)*1.05 + S.ctrl*0.14 + S.stam*0.1 + bk*2.2 + relevantAbilCount("P")*1.5-(S.traits&&S.traits.yips?3:0)))); }
@@ -1494,7 +1608,13 @@ function endTurn(){
   const now = calNow();
   if(prevY===12 && now.m===1) S.year++;
   if(prevY===6 && now.m===9 && S.turn<CAL.length){ summerCamp(); return; }
-  if(chance(0.2)) S.yaruki = Math.max(0, Math.min(4, S.yaruki + (chance(0.5)?1:-1)));
+  const wobble=S.abil.includes("不動如山")?0.1:S.abil.includes("大起大落")?0.4:0.2;
+  if(chance(wobble)) S.yaruki = Math.max(0, Math.min(4, S.yaruki + (chance(0.5)?1:-1)));
+  if(S.abil.includes("不動如山")&&S.ailments.includes("低潮")&&chance(0.4)){S.ailments=S.ailments.filter(a=>a!=="低潮");sys("不動如山：低潮悄悄退去。");}
+  if(prevY!==now.m){
+    if(S.abil.includes("夏男")&&[6,7,8].includes(now.m)){yarukiUp();sys("夏男：氣溫升高，你的引擎也跟著熱起來（狀態+1）。");}
+    if(S.abil.includes("秋之男")&&[9,10,11].includes(now.m)){yarukiUp();sys("秋之男：秋風一起，手感就來（狀態+1）。");}
+  }
   if(S.ailments.includes("腰痛") && chance(0.3)){ S.ailments=S.ailments.filter(a=>a!=="腰痛"); sys("腰的狀況好多了。"); }
   statusBar();
   runTurn();
@@ -1597,7 +1717,8 @@ function actionMenu(){
     if(d.k)parts.push("筋"+d.k); if(d.g)parts.push("技"+d.g); if(d.s)parts.push(sN+d.s);
     if(d.tough)parts.push("韌+"+d.tough);
     const cnt=S.pCount[kind]||0;
-    const prog = (cnt<20&&P40_REWARD[kind])? "・"+cnt+"/20→"+P40_REWARD[kind] : "";
+    const mAt=practiceMilestoneAt();
+    const prog = (cnt<mAt&&P40_REWARD[kind])? "・"+cnt+"/"+mAt+"→"+P40_REWARD[kind] : "";
     return name+"｜"+parts.join(" ")+prog;
   };
   if(S.pos==="B"||S.twoWay){
@@ -1626,7 +1747,7 @@ function actionMenu(){
   list.push({label:"存檔", fn:saveMenu, small:true});
   choices(list, "體力 "+S.hp+"/"+S.maxHp+"　狀態："+moodName(S.yaruki)+"　學業："+S.study
     +(S.ailments.length?"　異常："+S.ailments.join("、"):"")
-    +"　｜按鈕上：筋=筋力點 技=技術點 "+sN+"="+(S.twoWay?"變化／敏捷共用":S.pos==="P"?"變化":"敏捷")+"點（絕好調時×1.3）　x/20→特性＝練滿20次習得"
+    +"　｜按鈕上：筋=筋力點 技=技術點 "+sN+"="+(S.twoWay?"變化／敏捷共用":S.pos==="P"?"變化":"敏捷")+"點（絕好調時×1.3）　x/N→特性＝練滿N次習得（天才/天生怪物可縮短）"
     +(S.twoWay?"　｜二刀流負荷：非保養練習體力消耗+15%、受傷風險+25%":""));
 }
 function pitcherManagementMenu(back){
@@ -1675,6 +1796,7 @@ function practice(kind){
   ],"「"+(d.label||kind)+"」要用什麼強度？（狀態與健康運會影響梭哈的風險）");
 }
 function practiceWith(kind,tier){
+  if(kind!=="str")noteStyleChoice(tier);
   const d=PRACTICE_DEF[kind];
   const throwing=["nage","shadow","henka"].includes(kind);
   const tierMul=tier==="safe"?0.7:tier==="allin"?1.6:1;
@@ -1709,9 +1831,9 @@ function practiceWith(kind,tier){
   S.pCount[kind]=(S.pCount[kind]||0)+1;
   S.traitCounters.yearPractice[kind]=(S.traitCounters.yearPractice[kind]||0)+1;
   if(S.age<25&&S.traitCounters.careActions>=18)unlockTrait("disc","25歲前累積18次主動保養／充分休息");
-  if(S.pCount[kind]===20){
+  if(S.pCount[kind]>=practiceMilestoneAt()){
     const r=P40_REWARD[kind];
-    if(r){ ev("這項練習已累積二十次，身體記住了什麼——"); addAbil(r); }
+    if(r&&!S.abil.includes(r)){ ev("這項練習累積了足夠的次數，身體記住了什麼——"); addAbil(r); }
   }
   if(S.yaruki===4) sys("絕好調！練習效果大幅提升！");
   if(throwing&&resolveArmCrisis(afterAction,{forced:false}))return;
@@ -1782,6 +1904,7 @@ function studyMenu(){
   ],"段考與學測看累積；爆肝有代價。");
 }
 function doStudyTier(tier){
+  noteStyleChoice(tier);
   const add=tier==="safe"?ri(2,3):tier==="allin"?ri(8,12):ri(4,7);
   const cost=tier==="safe"?2:tier==="allin"?14:6;
   S.study=Math.min(99,S.study+add);S.hp=Math.max(0,S.hp-cost);
@@ -1873,7 +1996,7 @@ function allocMenu(back){
     (()=>{const pc=cap("velo",168),kc=steppedCost(12,"velo",S.velo,1,1),gc=steppedCost(6,"velo",S.velo,1,1);buy(pitN("球速+1km（"+S.velo+"→"+Math.min(pc,S.velo+1)+" / 潛力"+pc+"）"),"筋"+kc+" 技"+gc+tierNote("velo",S.velo),()=>S.velo<pc&&S.expK>=kc&&S.expG>=gc,()=>{raise("velo",1);S.expK-=kc;S.expG-=gc;},S.velo>=pc);})();
     (()=>{const pc=cap("ctrl",255),step=trainingStepToCap("ctrl",S.ctrl,6,255,S),gc=steppedCost(16,"ctrl",S.ctrl,step,6);buy(pitN("控球+"+step+"（"+S.ctrl+"→"+Math.min(pc,S.ctrl+step)+" / 潛力"+pc+"）"),"技"+gc+tierNote("ctrl",S.ctrl),()=>step>0&&S.expG>=gc,()=>{raise("ctrl",step);S.expG-=gc;},step<=0);})();
     (()=>{const pc=cap("stam",255),step=trainingStepToCap("stam",S.stam,6,255,S),kc=steppedCost(14,"stam",S.stam,step,6);buy(pitN("耐力+"+step+"（"+S.stam+"→"+Math.min(pc,S.stam+step)+" / 潛力"+pc+"）"),"筋"+kc+tierNote("stam",S.stam),()=>step>0&&S.expK>=kc,()=>{raise("stam",step);S.expK-=kc;},step<=0);})();
-    const breakCap=cap("breakTotal",18),breakTotal=currentBreakTotal(S);
+    const breakCap=cap("breakTotal",breakHardCap(S)),breakTotal=currentBreakTotal(S);
     const learnedBreaks=Object.keys(S.breaks).filter(bn=>(Number(S.breaks[bn])||0)>0);
     Object.keys(BREAK_POOL).forEach(bn=>{
       const lv=Number(S.breaks[bn])||0;
@@ -2130,9 +2253,15 @@ function theirHalf(inn, foeStr){
     const bk=Object.values(S.breaks).reduce((a,b)=>a+b,0);
     const sink=(S.breaks["伸卡球"]||0), fork=(S.breaks["指叉球"]||0);
     const effort=S.armHealth.effort==="full"?0.1:S.armHealth.effort==="rest"?-0.08:0;
-    const stuff=(S.velo-115)/50*0.5 + bk*0.05 + (moodMod()-1)*0.3 + effort + armPerformanceMod() - (tired?0.2:0);
+    const moodTerm=hasT("冷面投手")?Math.max(0,(moodMod()-1))*0.3:(moodMod()-1)*0.3;
+    let paceAdj=0;
+    if(hasT("越投越順")&&M.pitchRole==="SP"&&inn>=5)paceAdj+=0.08;
+    if(hasT("慢熱")&&inn<=2)paceAdj-=0.06;
+    if(hasT("大舞台")&&(M.cfg.mustDecide||String(M.cfg.competitionKey).startsWith("INTL.")))paceAdj+=0.05;
+    const stuff=(S.velo-115)/50*0.5 + bk*0.05 + moodTerm + effort + armPerformanceMod() + paceAdj - (tired?0.2:0);
     const ctrlV=S.ctrl/255;
     let outs=0, on1=false, lines=[], batterIdx=0;
+    let baserunnerStreak=0, shaken=false;
     while(outs<3 && runs<6){
       batterIdx++;
       M.myGame.pit.np += ri(3,6);
@@ -2140,19 +2269,23 @@ function theirHalf(inn, foeStr){
       const bHand = bHandR<0.55?"R": bHandR<0.9?"L":(S.throwHand==="L"?"R":"L");
       const same = bHand===S.throwHand;
       const lifeEdge=currentMatchTraitEdge("P");
-      let pK = 0.24 + stuff*0.3 + (same?0.05:0) - foeStr*0.012 + (diceMod("win")-3.5)*0.008+lifeEdge*0.65;
+      let pK = 0.24 + (stuff-(shaken?0.08:0))*0.3 + (same?0.05:0) - foeStr*0.012 + (diceMod("win")-3.5)*0.008+lifeEdge*0.65;
       if(S.throwHand==="L"&&bHand==="L"){ pK+=0.03; if(hasT("左打者殺手"))pK+=0.06; }
       if(S.throwHand==="L"&&bHand==="R"&&hasT("火線交叉")) pK+=0.05;
       if(hasT("速差魔術師")) pK+=0.03;
+    if(hasT("尾勁○")) pK+=0.03;
+    if(hasT("暴力直球")) pK+=0.04;
+    if(hasT("鬼氣逼人")&&M.pitchRole!=="SP") pK+=0.05;
       if(hasT("配球師")) pK+=0.03;
       if(hasT("釋球○")) pK+=0.02;
       if(hasT("內角職人")||hasT("外角職人")) pK+=0.02;
       if(on1&&hasT("危機○")) pK+=0.05;
       if(S.flags.battery) pK+=0.02;   // 羈絆：黃金電池（阿海）
-      const pBB = Math.max(0.03, 0.12 - ctrlV*0.10 + (tired?0.05:0));
+      const pBB = Math.max(0.03, 0.12 - ctrlV*0.10 + (tired?0.05:0) + (shaken?0.03:0) + (hasT("暴力直球")?0.03:0));
       const pHitA = Math.max(0.08, 0.24 - stuff*0.18 + foeStr*0.014 - ctrlV*0.05 + (tired?0.06:0)-lifeEdge*0.45);
       const r=rnd();
       if(r<pK){
+        baserunnerStreak=0;
         outs++; M.myGame.pit.so++; S.stats.so++; M.myGame.pit.outs++; S.stats.outsRec++;
         const flavor = pick(["外角低變化球引誘揮空","同位置速差騙過","內角速球壓制","對角配球戲耍"]);
         if(flavor.includes("速差")||flavor.includes("對角")){ S.flags.comboOK=(S.flags.comboOK||0)+1; }
@@ -2161,14 +2294,19 @@ function theirHalf(inn, foeStr){
         if(S.throwHand==="L"&&bHand==="L") S.flags.tKL=(S.flags.tKL||0)+1;
         if(chance(0.4)) lines.push("K！"+handTxt(bHand)+"打者遭"+flavor+"。");
       }else if(r<pK+pBB){
+        baserunnerStreak++;
+        if(baserunnerStreak>=2&&!shaken&&!hasT("泰然自若")){shaken=true;S.flags.tShaken=(S.flags.tShaken||0)+1;lines.push("連續讓人上壘……你的投球節奏亂了（動搖：球威下降、四壞增加）。");}
         M.myGame.pit.bb++; S.stats.wa=(S.stats.wa||0)+1;
         if(on1&&chance(0.25)){ runs++; M.myGame.pit.er++; S.stats.er++; lines.push("保送擠壘失分…"); }
         else lines.push("投出四壞。");
         on1=true;
       }else if(r<pK+pBB+pHitA){
+        baserunnerStreak++;
+        if(baserunnerStreak>=2&&!shaken&&!hasT("泰然自若")){shaken=true;S.flags.tShaken=(S.flags.tShaken||0)+1;lines.push("連續被咬中球心……你深呼吸的次數變多了（動搖）。");}
         M.myGame.pit.h++; S.stats.ha=(S.stats.ha||0)+1;
-        const hardP = 0.16 + foeStr*0.015 - stuff*0.12 + (same?0:0.04) - (hasT("低球○")?0.03:0);
-        if(chance(hardP*0.35)){
+        let hardP = 0.16 + foeStr*0.015 - stuff*0.12 + (same?0:0.04) - (hasT("低球○")?0.03:0);
+        if(hasT("重球"))hardP-=0.04;
+        if(chance(hardP*(hasT("逃球")?0.21:0.35))){
           const rr=1+(on1?1:0); runs+=rr; on1=false;
           M.myGame.pit.er+=rr; S.stats.er+=rr;
           lines.push("💦 失投被咬中——飛出牆外，失"+rr+"分……");
@@ -2213,8 +2351,9 @@ function theirHalf(inn, foeStr){
 /* ---- 我方進攻半局（你的打席詳細呈現） ---- */
 function ourHalf(inn, foeStr, addPitches){
   let runs=0, pitches=ri(12,20);
-  const teamAtk=teamAttackChance(foeStr);
-  if(chance(teamAtk)) runs+=ri(1,2);
+  const teamAtk=teamAttackChance(foeStr)+(S.abil.includes("氣氛製造機")?0.015:0);
+  M.teamScoredThisInning=false;
+  if(chance(teamAtk)){ runs+=ri(1,2); M.teamScoredThisInning=true; }
   if((S.pos!=="P"||S.twoWay) && chance(0.55)){
     runs += myPlateAppearance(inn, foeStr, (p)=>{pitches+=p;});
   }else if(S.pos==="P" && !S.twoWay && chance(0.2)){
@@ -2231,15 +2370,19 @@ function myPlateAppearance(inn, foeStr, addP){
   const adv = side!==fp.hand;
   const mm=moodMod();
   bat.pa++;
-  let pHit = 0.16 + S.meet*0.016 + S.power*0.0004 + (adv?0.045:-0.045) + (mm-1)*0.15 + (diceMod("win")-3.5)*0.012+currentMatchTraitEdge("B");
+  const sideMalus=hasT("廣角打法")?-0.022:-0.045; // 廣角打法：同側劣勢減半
+  let pHit = 0.16 + S.meet*0.016 + S.power*0.0004 + (adv?0.045:sideMalus) + (mm-1)*0.15 + (diceMod("win")-3.5)*0.012+currentMatchTraitEdge("B");
   if(fp.hand==="L"&&hasT("左投剋星")) pHit+=0.05;
   if(hasT("機會○")&&chance(0.5)) pHit+=0.03;
   if(hasT("內角剋星")||hasT("外角剋星")) pHit+=0.02;
+  const behind=M.scoreUs<M.scoreThem, lastFrame=inn>=M.cfg.innings;
+  if(hasT("逆境○")&&behind) pHit+=0.04;
+  if(hasT("再見男")&&lastFrame&&M.scoreUs<=M.scoreThem) pHit+=0.05;
   let pBB = 0.07 + (hasT("選球眼")?0.05:0) + (hasT("纏鬥打擊")?0.04:0) + (hasT("鷹眼")?0.03:0);
   let pK  = Math.max(0.06, 0.24 - S.meet*0.010 + foeStr*0.012 - (adv?0.02:0) - (hasT("纏鬥打擊")?0.04:0));
   const nPitch = 3 + (hasT("纏鬥打擊")?ri(1,4):ri(0,2)) + (hasT("選球眼")?1:0);
   addP(nPitch);
-  if(chance(Math.max(0.03,(0.09-foeStr*0.005))*(nPitch/4)*(0.7+diceMod("lucky")*0.1))){ pHit+=0.15; } // 磨出失投甜球×機遇運
+  if(chance(Math.max(0.03,(0.09-foeStr*0.005))*(nPitch/4)*(0.7+diceMod("lucky")*0.1)*(hasT("威壓感")?1.5:1))){ pHit+=0.15; } // 磨出失投甜球×機遇運（威壓感放大）
   const r=rnd();
   if(r<pK){
     bat.so++; bat.ab++; S.stats.ab++; S.stats.bso=(S.stats.bso||0)+1;
@@ -2256,6 +2399,13 @@ function myPlateAppearance(inn, foeStr, addP){
   if(r<pK+pBB+Math.max(0.1,pHit)){
     bat.h++; S.stats.h++;
     if(fp.hand==="L") S.flags.tVsL=(S.flags.tVsL||0)+1;
+    if(behind) S.flags.tClutchBehind=(S.flags.tClutchBehind||0)+1;
+    if(lastFrame&&M.scoreUs<=M.scoreThem) S.flags.tSayonara=(S.flags.tSayonara||0)+1;
+    if(M.teamScoredThisInning) S.flags.tFollowHit=(S.flags.tFollowHit||0)+1;
+    if(chance(Math.max(0.03,(S.run-5)*0.02)+(hasT("盜壘○")?0.10:0))){
+      bat.sb++; S.flags.tSB=(S.flags.tSB||0)+1;
+      gameLine("　(跑) 起跑！滑進二壘——盜壘成功！","B");
+    }
     const pull = hasT("拉打王")?0.5 : (hasT("推打達人")||hasT("推打"))?0.2 : 0.35;
     const dir = chance(pull)?"pull":chance(0.5)?"push":"mid";
     if(dir==="pull")S.flags.tPull=(S.flags.tPull||0)+1;
@@ -2264,7 +2414,7 @@ function myPlateAppearance(inn, foeStr, addP){
     const pHR = Math.min(0.38, S.power*0.0016 + (dir==="pull"?0.04:0) + (adv?0.02:0) + S.traj*0.01 + (hasT("衝擊力")?0.03:0));
     const dirW = dir==="pull"?"強拉左半邊":dir==="push"?"順推右外野":"咬中直擊中堅";
     if(chance(pHR)){
-      bat.hr++; S.stats.hr++;
+      bat.hr++; S.stats.hr++; M.lastPAHR=true;
       const rbi=1+(chance(0.35)?1:0);
       bat.rbi+=rbi; S.stats.rbi+=rbi;
       gameLine("　(打) 🎆 你的打席："+dirW+"——全壘打！！（"+rbi+"分砲）","B");
@@ -2327,6 +2477,18 @@ function finishMatch(){
        +'<tr><td>'+esc(competitionLabel(M.cfg.competitionKey))+'通算</td><td>'+compAgg.bat.pa+'</td><td>'+compAgg.bat.ab+'</td><td>'+compAgg.bat.h+'</td><td>'+compAgg.bat.d2+'</td><td>'+compAgg.bat.hr+'</td><td>'+compAgg.bat.rbi+'</td><td>'+compAgg.bat.bb+'</td><td>'+compAgg.bat.so+'</td><td>'+fmtStat3(tr.avg)+'</td><td>'+fmtStat3(tr.ops)+'</td></tr></table>';
   }
   out("【個人成績單】"+box,"story");
+  if(hasBat){
+    if(bat.h>=3)S.flags.tMultiHit=(S.flags.tMultiHit||0)+1;
+    if(bat.hr>=2)S.flags.tTwoHR=(S.flags.tTwoHR||0)+1;
+  }
+  if(M.cfg.mustDecide||String(M.cfg.competitionKey).startsWith("INTL."))S.flags.tBigStage=(S.flags.tBigStage||0)+1;
+  if(hasPit){
+    if(pit.so>=10)S.flags.tK10=(S.flags.tK10||0)+1;
+    if(pit.w&&M.pitchRole==="SP")S.flags.tSPwin=(S.flags.tSPwin||0)+1;
+    if(M.pitchRole==="SP"&&pit.outs>=M.cfg.innings*3)S.flags.tCG=(S.flags.tCG||0)+1;
+    if(S.yaruki<=1&&pit.er<=2&&pit.outs>=9)S.flags.tColdQ=(S.flags.tColdQ||0)+1;
+    if(pit.sv)S.flags.tSVcount=(S.flags.tSVcount||0)+1;
+  }
   if(M.heroCall&&hasPit){
     const broke=chance(M.heroCall.risk);
     if(broke){
@@ -2418,6 +2580,21 @@ function traitProgress(){
   chk("tOut",8,"外角剋星","對外角球的打擊上升");
   chk("tVsL",6,"左投剋星","對左投手的打擊大幅強化");
   chk("tRead",14,"鷹眼","選球判斷力強化，保送率上升");
+  chk("tClutchBehind",8,"逆境○","球隊落後時的打擊大幅提升");
+  chk("tSayonara",2,"再見男","延長賽與最終局的關鍵打席強化");
+  chk("tSB",8,"盜壘○","盜壘成功率大幅提高");
+  if(S.abil.includes("拉打王")&&S.abil.includes("推打達人")&&!S.abil.includes("廣角打法")){
+    ev("拉推自如，全場都是你的攻擊範圍——"); addAbil("廣角打法"); sys("左右對決的劣勢減半");
+  }
+  if((S.pos==="B"||S.twoWay)&&S.fame>=120&&S.power>=170&&!S.abil.includes("威壓感")){
+    ev("光是站上打擊區，對方捕手就開始擦汗——"); addAbil("威壓感"); sys("對方投手面對你更容易失投");
+  }
+  chk("tMultiHit",3,"手感火燙","單場兩安後的打席大幅強化");
+  chk("tTwoHR",2,"再來一發","開轟後的下一打席繼續強化");
+  chk("tFollowHit",8,"接棒者","隊友先得分的半局更容易跟進");
+  chk("tBigStage",10,"大舞台","國際賽・淘汰戰・冠軍舞台全面強化");
+  if(S.fame>=80&&!S.abil.includes("人氣者")){ ev("你的應援毛巾在夜市有人仿冒了——"); addAbil("人氣者"); sys("勝利與季末的知名度收益增加"); }
+  if(S.flags.bondTaiya&&S.flags.bondAhai&&S.flags.bondBlack&&!S.abil.includes("氣氛製造機")){ ev("有你在的休息區，永遠不會安靜——"); addAbil("氣氛製造機"); sys("全隊攻擊小幅提升"); }
   if(S.pos==="P"){
     chk("comboOK",10,"速差魔術師","速差系配球的三振率上升");
     chk("comboOK",22,"配球師","所有配球連攜的三振率上升");
@@ -2432,6 +2609,15 @@ function traitProgress(){
       chk("tKL",10,"左打者殺手","對左打者的壓制大幅上升");
       chk("tCross",8,"火線交叉","對右打者的內角速球威力大幅上升");
     }
+    chk("tK10",2,"尾勁○","直球尾勁：三振率提高");
+    chk("tCG",3,"完投體質","球數容量提高12%");
+    chk("tColdQ",2,"冷面投手","狀態低迷不再影響投球內容");
+    chk("tSVcount",20,"鬼氣逼人","短局數登板的壓制力提高");
+    if(S.ctrl>=160&&!S.abil.includes("逃球")){ ev("你學會了跟打者「談判」——"); addAbil("逃球"); sys("失投時的傷害減輕"); }
+    chk("tSPwin",10,"越投越順","先發第5局起球威遞增");
+    if(S.velo>=150&&S.ctrl<100&&!S.abil.includes("暴力直球")){ ev("你的直球像沒拴繩的鬥犬——"); addAbil("暴力直球"); sys("三振率提高但保送率也提高（雙面）"); }
+    if(S.abil.includes("冷面投手")&&(S.flags.tShaken||0)>=6&&!S.abil.includes("泰然自若")){ ev("風浪見多了，心跳就不再跟著記分板走——"); addAbil("泰然自若"); sys("完全免疫動搖狀態"); }
+    if(S.traitCounters.careActions>=30&&!S.abil.includes("回復○")){ ev("日復一日的保養化為天賦——"); addAbil("回復○"); sys("手臂恢復效率提高20%"); }
   }
 }
 /* ================= 出去晃晃（台灣小鎮）＋ 戀愛線 ================= */
@@ -2456,8 +2642,9 @@ function townHelp(key,back){
   const h=TOWN_HELP[key];if(!h){back();return;}
   talk(h.who,h.ask);
   const settle=(tier)=>{
-    const p=tier==="safe"?0.82:tier==="std"?0.6:0.45;
-    const mul=tier==="safe"?1:tier==="std"?2:3.5;
+    noteStyleChoice(tier);
+    const p=(tier==="safe"?0.82:tier==="std"?0.6:0.45)+styleSuccessBonus(tier);
+    const mul=tier==="safe"?(S.abil.includes("慎重派")?1.25:1):tier==="std"?2:3.5;
     const ok=chance(Math.max(0.15,Math.min(0.95,p+(S.yaruki-2)*0.04+(S.traits.genius?0.1:0)+(S.traits.clutch&&tier==="allin"?0.15:0))));
     if(ok){ h.reward(mul); if(tier==="allin")extra("賣力演出，全場叫好！"); }
     else{
@@ -2777,8 +2964,8 @@ const HS_EVENT_CARDS=[
   {t:"深夜雞排的誘惑",need:null,story:"晚自習後，雞排攤的香味飄進宿舍窗戶。去，還是不去？",hp:true,junk:true,tag:"自制力測試"}
 ];
 function hsCardSuccess(tier){
-  /* 保守 0.80／標準 0.60／梭哈 0.45；狀態與特性修正 */
-  let p=tier==="safe"?0.8:tier==="std"?0.6:0.45;
+  /* 保守 0.80／標準 0.60／梭哈 0.45；狀態、特性與風格修正 */
+  let p=(tier==="safe"?0.8:tier==="std"?0.6:0.45)+styleSuccessBonus(tier);
   p+=(S.yaruki-2)*0.04;
   if(S.traits.genius)p+=0.1;
   if(S.traits.late)p+=0.05;
@@ -2791,8 +2978,9 @@ function hsEventCard(done){
   const c=pick(pool);
   hr();head("突發事件卡・"+c.t,c.tag);
   story(c.story);
-  const mul={safe:1,std:2,allin:3.5},fail={safe:0,std:1,allin:2};
+  const mul={safe:S.abil.includes("慎重派")?1.25:1,std:2,allin:3.5},fail={safe:0,std:1,allin:2};
   const doTier=(tier)=>{
+    noteStyleChoice(tier);
     const ok=chance(hsCardSuccess(tier));
     S.flags.cardAllIn=S.flags.cardAllIn||{w:0,f:0};
     if(tier==="allin"){ if(ok){S.flags.cardAllIn.w++;}else{S.flags.cardAllIn.f++;S.flags.gambleFailures=(S.flags.gambleFailures||0)+1;} }
@@ -3985,6 +4173,9 @@ function monthStep(){
   assignGoal();
   const monthGames=Math.min(Math.ceil(s.total/SEASON_MONTHS.length), s.total-s.i);
   s.nextPause=s.i+monthGames;
+  const mNum=Number(SEASON_MONTHS[Math.min(s.mi-1,SEASON_MONTHS.length-1)]);
+  if(S.abil.includes("夏男")&&[6,7,8].includes(mNum)){yarukiUp();sys("夏男：盛夏是你的季節（狀態+1）。");}
+  if(S.abil.includes("秋之男")&&[9,10,11].includes(mNum)){yarukiUp();sys("秋之男：決戰的秋天，你最清醒（狀態+1）。");}
   const mLabel=(SEASON_MONTHS[Math.min(s.mi-1,SEASON_MONTHS.length-1)])+"月";
   proMonthAction(mLabel, monthGames);
 }
@@ -4025,7 +4216,7 @@ const PRO_EVENT_CARDS=[
   {t:"老將的深夜特訓",story:"更衣室最資深的前輩丟來一句：「留下來，我教你一招吃飯的。」",kind:"train"}
 ];
 function proCardSuccess(tier){
-  let p=tier==="safe"?0.82:tier==="std"?0.6:0.42;
+  let p=(tier==="safe"?0.82:tier==="std"?0.6:0.42)+styleSuccessBonus(tier);
   p+=(S.yaruki-2)*0.03;
   if(S.traits.genius||S.traits.late)p+=0.08;
   if(S.traits.clutch&&tier==="allin")p+=0.15;
@@ -4040,6 +4231,7 @@ function proEventCard(done){
   hr();head("場外突發・"+c.t,"自由時間也有價格");
   story(c.story);
   const settle=(tier)=>{
+    noteStyleChoice(tier);
     if(tier==="safe"){
       S.flags.discChoices=(S.flags.discChoices||0)+1;
       if(S.age<25&&S.flags.discChoices>=12)unlockTrait("disc","25歲前持續節制場外行程");
@@ -4073,7 +4265,7 @@ function proEventCard(done){
       }
       statusBar();next(null,done);return;
     }
-    const mul=tier==="safe"?1:tier==="std"?2:3.5;
+    const mul=tier==="safe"?(S.abil.includes("慎重派")?1.25:1):tier==="std"?2:3.5;
     if(ok){
       if(c.kind==="media"){S.fame+=Math.round(2*mul);gain("形象加分！知名度+"+Math.round(2*mul)+(tier==="allin"?"，全場焦點都是你":""));}
       else if(c.kind==="gamble"){S.fame+=Math.round(1*mul);gain("及時離桌，人脈與話題性+"+Math.round(1*mul));}
@@ -4288,7 +4480,7 @@ function playGame(choice, imp, foe, silent){
         else {if(chance(0.22)){bat.d2++;}if(chance(0.3))bat.rbi++;}
       }else if(chance(Math.max(0.08,0.28-S.meet*0.012)))bat.so++;
     }
-    if((bat.h+bat.bb)>0&&chance(Math.max(0.02,(S.run-5)*0.018)))bat.sb=1;
+    if((bat.h+bat.bb)>0&&chance(Math.max(0.02,(S.run-5)*0.018)+(S.abil.includes("盜壘○")?0.08:0))){bat.sb=1;S.flags.tSB=(S.flags.tSB||0)+1;}
     s.batG++;s.pa+=bat.pa;s.ab+=bat.ab;s.h+=bat.h;s.dbl+=bat.d2;s.hr+=bat.hr;s.rbi+=bat.rbi;s.bb+=bat.bb;s.bso+=bat.so;s.sb+=bat.sb;
     goodBat=bat.h>=2||bat.hr>0;
     parts.push("打 "+bat.h+"安"+(bat.hr?("("+bat.hr+"轟)"):"")+(bat.rbi?(" "+bat.rbi+"打點"):""));
@@ -4335,6 +4527,10 @@ function playGame(choice, imp, foe, silent){
     }
   }else if(good&&chance(0.3)){ S.fame+=1; }
   if(pit){
+    if(pit.so>=10)S.flags.tK10=(S.flags.tK10||0)+1;
+    if(pit.w&&role==="SP")S.flags.tSPwin=(S.flags.tSPwin||0)+1;
+    if(pit.sv)S.flags.tSVcount=(S.flags.tSVcount||0)+1;
+    if(role==="SP"&&pit.outs>=24)S.flags.tCG=(S.flags.tCG||0)+1;
     const armGain=addArmLoad(pit.np,choice,1);
     if(!silent)sys("手臂帳本："+pit.np+"球，長期負荷+"+armGain.toFixed(1)+"；目前"+S.armHealth.load.toFixed(1)+"/"+armCap()+"，短期可用"+Math.round(S.armHealth.readiness)+"/100。");
     if(resolveArmCrisis(nextGame,{forced:false,sea:s}))return null;
@@ -4532,6 +4728,7 @@ function seasonEnd(){
   const rank = S.sea.tw>S.sea.tl? ri(1,3) : ri(3,6);
   head("球季終了", S.year+"年　"+S.team+"　"+s.tw+"勝"+s.tl+"敗（排名第"+rank+"）");
   story("你的成績："+myLine+(s.injured?("　（傷停"+s.injured+"次）"):""));
+  if(S.abil.includes("人氣者"))S.fame+=2;
   S.proYears.push({year:S.year,age:S.age,team:S.team+"("+S.level+")",level:S.level,league:S.league,line:myLine,
     rating:Math.round(rating),
     bat:{pa:s.pa,ab:s.ab,h:s.h,d2:s.dbl,d3:0,hr:s.hr,rbi:s.rbi,bb:s.bb,so:s.bso,sb:s.sb},
@@ -4554,6 +4751,9 @@ function seasonEnd(){
     S.flags.hof=(S.flags.hof||0)+Math.max(0,def);
   }
   // 所有年度獎項都必須依「本季實際層級」在升降前結算。
+  if(S.pos==="P"&&S.velo>=150&&s.ip>=80&&s.er*9/Math.max(1,s.ip)<=2.8&&!S.abil.includes("重球")){
+    ev("捕手接你的直球會痛——"); addAbil("重球"); sys("被強拉扛出牆的機率下降");
+  }
   resolveSeasonAwards(s,rating,seasonLevel);
   careerTitles();
   updateCareerTraitsAfterSeason(rating,seasonLevel,s);
