@@ -629,7 +629,9 @@ function rollSeasonDice(title){
   if(a.k===6&&a.g===6&&a.s===6){
     extra("能力骰全開——天生怪物！額外 +30 全能點數");
     S.expK+=10; S.expG+=10; S.expS+=10;
+    unlockTrait("monster","開季能力骰擲出三顆6全開");
   }
+  if(S.traits.monster&&!(a.k===6&&a.g===6&&a.s===6)){ yarukiUp(); sys("天生怪物的印記：開季狀態自然昂揚（狀態+1）。"); }
   if(S.traits.academy&&S.age<25&&chance(0.35)){
     const k=pick(["k","g","s"]),v=ri(floor,6)*4;
     if(k==="k")S.expK+=v;else if(k==="g")S.expG+=v;else S.expS+=v;
@@ -685,7 +687,8 @@ const TRAIT_META={
   cancer:{n:"更衣室毒瘤",kind:"bad",fx:"交易風險上升、續約與市場報價惡化",how:"反覆豪賭失敗或拒絕合理下放"},
   ambience:{n:"氣氛大師",kind:"bad",fx:"公開抱怨後，往後交易傳聞更頻繁",how:"兩次公開向媒體抱怨球隊"},
   thief:{n:"薪水小偷",kind:"bad",fx:"事件成功率下降、長約聲望受損",how:"拒絕下放後仍未打回合約身價"},
-  gutsy:{n:"背水一戰",kind:"good",fx:"帶傷出賽的表現與斷裂風險減半、關鍵戰再加成",how:"在醫療禁令下挺身而出並撐住關鍵戰"}
+  gutsy:{n:"背水一戰",kind:"good",fx:"帶傷出賽的表現與斷裂風險減半、關鍵戰再加成",how:"在醫療禁令下挺身而出並撐住關鍵戰"},
+  monster:{n:"天生怪物",kind:"good",fx:"天選印記：往後每年開季自帶好狀態",how:"開季能力骰擲出三顆6全開"}
 };
 const TRAIT_ORDER=Object.keys(TRAIT_META);
 const ABIL_META={
@@ -862,8 +865,10 @@ function addArmLoad(pitches,choice,mult){
 function recoverArm(units,deep){
   ensurePlayerSystems();units=Math.max(0,Number(units)||0);
   const sta=Math.min(4,S.stam/70),disc=S.traits.disc?1.2:1;
-  S.armHealth.readiness=Math.min(100,S.armHealth.readiness+units*(7+sta)*disc+(deep?18:0));
-  S.armHealth.load=Math.max(0,S.armHealth.load-units*(deep?1.8:0.18));
+  let over=1;
+  if((S.flags.armOveruse||0)>0){ over=0.5; S.flags.armOveruse--; } // 連投的債：恢復減半直到還完
+  S.armHealth.readiness=Math.min(100,S.armHealth.readiness+(units*(7+sta)*disc+(deep?18:0))*over);
+  S.armHealth.load=Math.max(0,S.armHealth.load-units*(deep?1.8:0.18)*over);
 }
 function performArmSurgery(ctx,failedInjection){
   ctx=ctx||{};ensurePlayerSystems();
@@ -1592,7 +1597,7 @@ function actionMenu(){
     if(d.k)parts.push("筋"+d.k); if(d.g)parts.push("技"+d.g); if(d.s)parts.push(sN+d.s);
     if(d.tough)parts.push("韌+"+d.tough);
     const cnt=S.pCount[kind]||0;
-    const prog = (cnt<40&&P40_REWARD[kind])? "・"+cnt+"/40→"+P40_REWARD[kind] : "";
+    const prog = (cnt<20&&P40_REWARD[kind])? "・"+cnt+"/20→"+P40_REWARD[kind] : "";
     return name+"｜"+parts.join(" ")+prog;
   };
   if(S.pos==="B"||S.twoWay){
@@ -1621,7 +1626,7 @@ function actionMenu(){
   list.push({label:"存檔", fn:saveMenu, small:true});
   choices(list, "體力 "+S.hp+"/"+S.maxHp+"　狀態："+moodName(S.yaruki)+"　學業："+S.study
     +(S.ailments.length?"　異常："+S.ailments.join("、"):"")
-    +"　｜按鈕上：筋=筋力點 技=技術點 "+sN+"="+(S.twoWay?"變化／敏捷共用":S.pos==="P"?"變化":"敏捷")+"點（絕好調時×1.3）　x/40→特性＝練滿40次習得"
+    +"　｜按鈕上：筋=筋力點 技=技術點 "+sN+"="+(S.twoWay?"變化／敏捷共用":S.pos==="P"?"變化":"敏捷")+"點（絕好調時×1.3）　x/20→特性＝練滿20次習得"
     +(S.twoWay?"　｜二刀流負荷：非保養練習體力消耗+15%、受傷風險+25%":""));
 }
 function pitcherManagementMenu(back){
@@ -1704,9 +1709,9 @@ function practiceWith(kind,tier){
   S.pCount[kind]=(S.pCount[kind]||0)+1;
   S.traitCounters.yearPractice[kind]=(S.traitCounters.yearPractice[kind]||0)+1;
   if(S.age<25&&S.traitCounters.careActions>=18)unlockTrait("disc","25歲前累積18次主動保養／充分休息");
-  if(S.pCount[kind]===40){
+  if(S.pCount[kind]===20){
     const r=P40_REWARD[kind];
-    if(r){ ev("這項練習已累積四十次，身體記住了什麼——"); addAbil(r); }
+    if(r){ ev("這項練習已累積二十次，身體記住了什麼——"); addAbil(r); }
   }
   if(S.yaruki===4) sys("絕好調！練習效果大幅提升！");
   if(throwing&&resolveArmCrisis(afterAction,{forced:false}))return;
@@ -2063,11 +2068,19 @@ function startMatch(cfg){
       {label:"聽醫療的，坐在板凳上看完",primary:true,fn:()=>{story("你握緊又鬆開的右手放回了膝蓋上。有些帳，留給未來的自己討。");next("比賽開始！",simulateGame);}},
     ],"這個選擇不會有人替你做。");
   }else if(S.pos==="P"&&role!=="OUT"){
-    choices([
+    const plan=[
       {label:"普通投｜標準球威・容量約"+cap+"球",primary:true,fn:()=>{setMatchPitchPlan("norm");simulateGame();}},
       {label:"全力投｜球威提高・手臂負荷×1.28",cls:"risk",fn:()=>{setMatchPitchPlan("full");simulateGame();}},
       {label:"省力投｜成績折損・手臂負荷×0.76",fn:()=>{setMatchPitchPlan("rest");simulateGame();}}
-    ],"手臂："+armStatus()+"（短期可用 "+Math.round(S.armHealth.readiness)+"／長期負荷 "+S.armHealth.load.toFixed(1)+"/"+armCap()+"）");
+    ];
+    if(cfg.mustDecide&&S.armHealth.readiness<60){
+      plan.splice(1,0,{label:"短休連投・咬牙壓上｜全力球威，但賽後疲勞沉重且恢復減半",cls:"risk",fn:()=>{
+        M.overwork=1;setMatchPitchPlan("full");
+        story("教練看了看你的手臂，又看了看記分板。「……省著點用。」他把球塞進你手套。");
+        simulateGame();
+      }});
+    }
+    choices(plan,"手臂："+armStatus()+"（短期可用 "+Math.round(S.armHealth.readiness)+"／長期負荷 "+S.armHealth.load.toFixed(1)+"/"+armCap()+"）"+(cfg.mustDecide&&S.armHealth.readiness<60?"　⚠ 疲勞未消的關鍵戰：連投是選項，代價也是":""));
   }else next("比賽開始！", simulateGame);
 }
 function setMatchPitchPlan(plan){
@@ -2321,12 +2334,27 @@ function finishMatch(){
       story("你投完最後一球就蹲了下去。隊醫衝上投手丘的那一刻，全場安靜得能聽見海風。");
       performArmSurgery({},false);
     }else{
+      S.flags.heroSurvives=(S.flags.heroSurvives||0)+1;
       extra("帶傷撐住了！這一場會被記住很多年");
       const heroGain=spGain(win?10:6,win?10:6,win?10:6);
       S.fame+=win?8:5;S.traitCounters.keyWins++;
       gain("背水一戰的淬鍊："+heroGain+"、知名度+"+(win?8:5));
-      unlockTrait("gutsy","在醫療禁令下挺身而出並撐住關鍵戰");
-      nick(S.throwHand==="L"?"鐵血左腕":"鐵血右腕");
+      if(S.flags.heroSurvives>=2){
+        unlockTrait("gutsy","兩度在醫療禁令下挺身而出並撐住關鍵戰");
+        nick(S.throwHand==="L"?"鐵血左腕":"鐵血右腕");
+      }else{
+        sys("一場成不了傳說——帶傷完投紀錄 "+S.flags.heroSurvives+"／2。再撐住一次，這個名號就是你的。");
+      }
+    }
+  }
+  if(M.overwork&&hasPit){
+    S.fatigue=Math.min(100,(S.fatigue||0)+12);
+    S.flags.armOveruse=(S.flags.armOveruse||0)+6;
+    sys("連投的帳單：全身疲勞+12，手臂恢復效率減半直到還完這筆債（約六次恢復量）。");
+    if(chance(0.08)&&!S.ailments.includes("手肘疼痛")){S.ailments.push("手肘疼痛");loss("肘部深處傳來鈍痛……【手肘疼痛】（持續投球會惡化）");}
+    if(pit.er<=2&&pit.outs>=3){
+      const owGain=spGain(4,4,4);S.fame+=2;S.traitCounters.keyWins++;
+      gain("短休連投還壓得住——韌性被看見了："+owGain+"、知名度+2");
     }
   }
   traitProgress();
