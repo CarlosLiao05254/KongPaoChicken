@@ -6,101 +6,126 @@
 <title>野球人生報 — 台灣文字棒球人生模擬</title>
 <style>
 :root{
-  --paper:#f2ecdc; --paper2:#eae2cd; --ink:#1c1a16; --ink2:#4a4438;
-  --line:#8b8266; --rule:#1c1a16; --red:#a02020; --sepia:#6b5d3f;
+  --paper:#f7f3e7; --paper2:#efe9d6; --card:#f4efdf; --ink:#26221a; --ink2:#5b5546;
+  --line:#c9c0a6; --rule:#26221a; --red:#a5372a; --sepia:#6b5d3f; --accent:#0f0e0b;
   font-size:16px;
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 body{
-  background:#d8d0ba;
-  color:var(--ink);
-  font-family:"Noto Serif TC","Songti TC","PMingLiU","MingLiU",serif;
-  display:flex; flex-direction:column; align-items:center; min-height:100vh;
-}
-#wrap{
-  width:100%; max-width:780px; display:flex; flex-direction:column; min-height:100vh;
   background:var(--paper);
-  box-shadow:0 0 18px rgba(0,0,0,.35);
-  background-image:repeating-linear-gradient(0deg, rgba(0,0,0,.012) 0 2px, transparent 2px 4px);
-}
-/* ── 報頭 ── */
-header{
-  padding:14px 18px 8px;
-  border-bottom:3px double var(--rule);
-  text-align:center;
-}
-header .row1{
-  display:flex; justify-content:space-between; align-items:baseline;
-  font-size:.7rem; color:var(--ink2); letter-spacing:1px;
-  border-bottom:1px solid var(--line); padding-bottom:4px; margin-bottom:6px;
-}
-header h1{
-  font-size:2.1rem; font-weight:900;
-  letter-spacing:clamp(.12em,1.2vw,.35em); text-indent:clamp(.12em,1.2vw,.35em);
-  font-family:"Noto Serif TC","PMingLiU",serif;
-}
-header .slogan{font-size:.68rem; color:var(--ink2); letter-spacing:clamp(.5px,.38vw,3px); margin-top:2px;}
-/* ── 選手資料欄（狀態列）── */
-#statusbar{
-  border-bottom:1px solid var(--rule);
-  background:var(--paper2);
-  padding:7px 16px; font-size:.78rem; line-height:1.9;
-  display:flex; flex-wrap:wrap; gap:2px 14px; color:var(--ink2);
-  width:100%; min-width:0;
-  position:sticky; top:0; z-index:5;
+  color:var(--ink);
   font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
-  font-variant-numeric:tabular-nums; letter-spacing:.01em;
+  min-height:100vh;
 }
-#profileFab{
-  position:fixed; right:14px; bottom:14px; z-index:40; display:none;
-  width:46px; height:46px; border-radius:50%; border:2px solid var(--ink);
-  background:var(--paper2); font-size:1.25rem; cursor:pointer;
-  box-shadow:2px 3px 0 rgba(0,0,0,.3);
+body.skin-news{font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;}
+#app{display:grid; grid-template-columns:250px minmax(0,1fr); min-height:100vh; max-width:1500px; margin:0 auto;}
+body.wide #app{max-width:1900px;}
+/* ── 左側欄：品牌＋生涯時間軸 ── */
+#sidebar{
+  border-right:2px solid var(--rule); padding:26px 18px 16px;
+  display:flex; flex-direction:column; gap:18px; position:sticky; top:0; height:100vh; overflow-y:auto;
+  background:var(--paper);
 }
-#profileFab:active{transform:translate(1px,1px);}
-#profileOverlay{
-  display:none; position:fixed; inset:0; z-index:50;
-  background:rgba(30,25,15,.45); overflow:auto; padding:18px 10px;
+#brand h1{font-size:1.9rem; font-weight:900; letter-spacing:.02em; font-family:"Noto Serif TC","PMingLiU",serif;}
+#brand h1 .ball{color:var(--red);}
+#brand .slogan{margin-top:6px; font-size:.72rem; letter-spacing:.35em; color:var(--ink2); border-top:2px solid var(--rule); border-bottom:2px solid var(--rule); padding:4px 0; text-align:center;}
+#tlPhase{font-size:.78rem; color:var(--ink2); letter-spacing:.12em; padding-left:4px;}
+#timeline{display:flex; flex-direction:column; border-left:2px solid var(--rule); margin-left:6px;}
+#timeline .tl{
+  position:relative; padding:6px 0 6px 18px; font-size:.9rem; font-weight:700; color:var(--ink2);
+  cursor:pointer; letter-spacing:.05em; background:none; border:none; text-align:left; font-family:inherit;
 }
-#profileOverlayInner{
-  max-width:760px; margin:0 auto; background:var(--paper);
-  border:2px solid var(--ink); box-shadow:4px 5px 0 rgba(0,0,0,.35); padding:12px 16px 18px;
+#timeline .tl::before{
+  content:""; position:absolute; left:-6px; top:50%; transform:translateY(-50%);
+  width:8px; height:8px; border-radius:50%; background:var(--paper); border:2px solid var(--ink2);
 }
-#profileOverlayTop{
-  display:flex; justify-content:space-between; align-items:center;
-  border-bottom:2px solid var(--ink); padding-bottom:6px; margin-bottom:8px;
-  font-family:"Noto Sans TC",sans-serif; font-size:.85rem; font-weight:700;
+#timeline .tl.cur{color:var(--red);}
+#timeline .tl.cur::before{background:var(--red); border-color:var(--red); box-shadow:0 0 0 3px rgba(165,55,42,.2);}
+#seedFoot{margin-top:auto; font-size:.72rem; color:var(--ink2); font-family:"Courier New",monospace;}
+#seedFoot b{color:var(--red);}
+/* ── 主欄 ── */
+#mainCol{display:flex; flex-direction:column; min-width:0; border-right:2px solid var(--rule); background:var(--paper); position:relative;}
+/* 頂部資訊列 */
+#hdrWrap{position:sticky; top:0; z-index:8;}
+#statusbar{
+  background:var(--paper);
+  border-bottom:2px solid var(--rule); padding:14px 22px 8px;
+  font-variant-numeric:tabular-nums;
 }
-#profileOverlayTop button{border:1px solid var(--ink); background:var(--paper2); padding:4px 10px; cursor:pointer; font-size:.8rem;}
-.ov-head{font-size:1rem; font-weight:700; margin:4px 0 6px;}
-#statusbar>span{min-width:0;}
-#statusbar b{color:var(--ink); font-weight:700;}
-#statusbar .hp-low b, b.hp-low{color:var(--red);}
-/* ── 內文 ── */
-#log{ flex:1; min-width:0; padding:16px 20px; overflow-y:auto; line-height:1.95; font-size:.95rem; }
-#log p{margin:0 0 .6em 0; white-space:pre-wrap;}
-#log .sys{color:var(--ink2); font-size:.8rem; font-family:"Noto Sans TC",sans-serif;}
+.hdr-top{display:flex; align-items:flex-start; gap:12px;}
+.noBadge{
+  border:2px solid var(--red); color:var(--red); padding:2px 8px; text-align:center;
+  font-size:.62rem; font-weight:700; line-height:1.2; letter-spacing:.1em;
+}
+.noBadge b{display:block; font-size:1.25rem; color:var(--ink); letter-spacing:0;}
+.hdr-name{flex:1; min-width:0;}
+.hdr-name .nm{font-size:1.35rem; font-weight:900; letter-spacing:.04em;}
+.hdr-badges{display:inline-flex; gap:6px; margin-left:8px; vertical-align:middle;}
+.hdr-badges span{border:1.5px solid var(--rule); padding:1px 8px; font-size:.72rem; font-weight:700;}
+.hdr-badges span.tag{border-color:var(--red); color:var(--red);}
+.hdr-right{text-align:right; font-size:.72rem; color:var(--ink2); display:flex; align-items:flex-start; gap:10px;}
+.hdr-right .team{font-size:1rem; font-weight:900; color:var(--red); letter-spacing:.05em;}
+.hdr-right .lv{background:var(--red); color:#fff; padding:2px 8px; font-size:.76rem; font-weight:700; margin-left:5px;}
+#menuBtn{border:1.5px solid var(--rule); background:none; font-size:1.05rem; padding:4px 10px; cursor:pointer; line-height:1;}
+.hdr-stats{display:flex; gap:10px; margin:12px 0 6px; align-items:stretch;}
+.hstat{
+  flex:1; border:1.5px solid var(--rule); background:var(--paper2); text-align:center; padding:8px 4px 5px;
+}
+.hstat b{display:block; font-size:1.5rem; font-weight:900; font-family:"Noto Serif TC",serif; line-height:1.15;}
+.hstat b.red{color:var(--red);}
+.hstat i{font-style:normal; font-size:.7rem; color:var(--ink2); letter-spacing:.2em;}
+#detailBtn{
+  flex:0 0 64px; border:1.5px dashed var(--rule); background:none; cursor:pointer; font-size:.78rem;
+  font-weight:700; color:var(--ink2); font-family:inherit;
+}
+.hdr-dots{display:flex; justify-content:center; gap:22px; font-size:.75rem; color:var(--ink2); padding:2px 0 4px;}
+.hdr-dots span::before{content:"○ "; color:var(--ink2);}
+.hdr-dots span.on{color:var(--ink); font-weight:700;}
+.hdr-dots span.on::before{content:"● "; color:var(--red);}
+.hdr-sub{display:flex; flex-wrap:wrap; gap:4px 16px; font-size:.75rem; color:var(--ink2); padding:2px 0 4px; border-top:1px solid var(--line);}
+.hdr-sub b{color:var(--ink);}
+.hdr-sub b.hp-low, b.hp-low{color:var(--red);}
+/* 詳情面板 */
+#detailPanel{
+  display:none; border-bottom:2px solid var(--rule); background:var(--card); padding:16px 22px;
+  max-height:55vh; overflow-y:auto; box-shadow:0 8px 14px rgba(0,0,0,.12);
+}
+#detailPanel .dgrid{display:grid; grid-template-columns:1fr 1fr; gap:18px 34px;}
+#detailPanel h4{font-size:.82rem; letter-spacing:.15em; margin-bottom:8px;}
+#detailPanel h4::before{content:"■ "; color:var(--red);}
+#detailPanel .dsec{font-size:.85rem; color:var(--ink2); line-height:1.9;}
+#detailPanel .kv{display:flex; justify-content:space-between; border-bottom:1px dashed var(--line); padding:2px 0;}
+#detailPanel .kv.total{border-bottom:none; border-top:1px dashed var(--rule); font-weight:900;}
+#detailPanel .kv .v{font-weight:700; color:var(--ink);}
+#detailPanel .kv.total .v{color:var(--red);}
+/* ── 內文（事件卡片流）── */
+#log{flex:1; min-width:0; padding:20px 26px 120px; line-height:1.9; font-size:.94rem;}
+#log p{margin:0 0 .55em 0; white-space:pre-wrap;}
+.ycard{border:1.5px solid var(--rule); background:var(--card); padding:12px 18px; margin:0 0 16px; box-shadow:2px 2px 0 rgba(0,0,0,.08);}
+.ycard > p:last-child{margin-bottom:0;}
+.year-divider{
+  display:block; width:100%; text-align:center; background:none; border:none; cursor:pointer;
+  font:700 .92rem/1.6 "Noto Sans TC",sans-serif; color:var(--red); letter-spacing:.5em;
+  padding:10px 0 14px; font-variant-numeric:tabular-nums;
+}
+.year-divider::after{content:" ▸"; letter-spacing:0;}
+.year-divider.open::after{content:" ▾"; letter-spacing:0;}
+.ysec.collapsed .ysec-body{display:none;}
+#log .sys{color:var(--ink2); font-size:.79rem;}
 #log .story{color:var(--ink);}
 #log .talk{color:#2e2a20; background:rgba(0,0,0,.03); padding:2px 8px; border-left:3px solid var(--line);}
 #log .talk .who{font-weight:700; color:var(--sepia);}
 #log .ev{color:var(--sepia); font-weight:700;}
-#log .gain{color:#3c5a2a; font-size:.85rem; font-family:"Noto Sans TC",sans-serif;}
-#log .loss{color:var(--red); font-size:.85rem; font-family:"Noto Sans TC",sans-serif;}
-/* 頭條 */
+#log .gain{color:#2c6e2f; font-size:.85rem;}
+#log .loss{color:var(--red); font-size:.85rem;}
 #log .head{
-  color:var(--ink);
-  border-top:3px double var(--rule); border-bottom:3px double var(--rule);
-  padding:10px 6px; margin:18px 0 12px 0;
-  font-weight:900; font-size:1.25rem; letter-spacing:.12em; text-align:center;
-  line-height:1.5;
+  font-weight:800; font-size:.95rem; letter-spacing:.12em; margin:0 0 8px; color:var(--ink);
 }
-#log .subhead{
-  text-align:center; font-size:.8rem; color:var(--ink2); letter-spacing:2px;
-  margin:-6px 0 12px 0;
-}
-#log .extra{ /* 號外 */
-  color:var(--red); border:2px solid var(--red);
-  padding:8px 10px; margin:14px 0; font-weight:900; text-align:center; letter-spacing:.2em;
+#log .head::before{content:"■ "; color:#37506b;}
+#log .subhead{font-size:.76rem; color:var(--ink2); letter-spacing:1px; margin:-4px 0 8px;}
+#log .extra{
+  color:var(--red); border:2px solid var(--red); background:#fbf3ef;
+  padding:8px 10px; margin:10px 0; font-weight:900; text-align:center; letter-spacing:.2em;
 }
 #log .game{color:#26323e;}
 #log .gameB{color:#5a3413;}
@@ -109,127 +134,153 @@ header .slogan{font-size:.68rem; color:var(--ink2); letter-spacing:clamp(.5px,.3
   border:1px solid var(--rule); outline:1px solid var(--rule); outline-offset:2px;
   display:inline-block; padding:5px 12px; margin:6px 2px; font-size:.85rem; font-weight:700;
 }
-#log hr{border:none; border-top:1px solid var(--line); margin:14px 0;}
-/* ── 選項（報上的告示欄）── */
-#choices{
-  border-top:3px double var(--rule); background:var(--paper2);
-  padding:10px 16px 16px;
-}
-#choices .hint{font-size:.78rem; color:var(--ink2); margin-bottom:8px; font-family:"Noto Sans TC",sans-serif;}
-#choices .btns{display:flex; flex-wrap:wrap; gap:8px; min-width:0;}
+#log hr{border:none; margin:6px 0;}
+/* ── 選項 ── */
+#choices{padding:4px 26px 26px; background:var(--paper);}
+#choices .hint{font-size:.78rem; color:var(--ink2); margin:0 0 10px; line-height:1.7;}
+#choices .btns{display:flex; flex-direction:column; gap:10px; min-width:0;}
 #choices button{
-  background:#fdfaf2; color:var(--ink); border:1px solid var(--rule);
-  padding:8px 14px; font-size:.9rem; cursor:pointer;
-  font-family:"Noto Serif TC","PMingLiU",serif; font-weight:700;
-  box-shadow:2px 2px 0 rgba(0,0,0,.25);
-  transition:transform .08s, box-shadow .08s;
+  width:100%; text-align:left; background:var(--card); color:var(--ink);
+  border:1.5px solid var(--rule); padding:12px 16px; font-size:.92rem; cursor:pointer;
+  font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif; font-weight:700;
+  box-shadow:3px 3px 0 rgba(0,0,0,.16);
+  transition:transform .06s, box-shadow .06s;
   min-width:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;
-  line-height:1.45;
-  font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
-  font-variant-numeric:tabular-nums;
-  letter-spacing:.01em;
-  line-height:1.55;
+  line-height:1.5; font-variant-numeric:tabular-nums; letter-spacing:.01em;
 }
-#choices button:hover{ transform:translate(1px,1px); box-shadow:1px 1px 0 rgba(0,0,0,.25); background:#fff; }
-#choices button.primary{ border-width:2px; }
-#choices button.small{font-size:.76rem; padding:5px 9px; opacity:.85; font-weight:400;}
-#choices button.can{border-color:#3c5a2a; color:#2c4a1e; background:#eef4e4; box-shadow:2px 2px 0 rgba(60,90,42,.4);}
-#choices button.cant{opacity:.4;}
-#choices button.risk{border-color:var(--red);color:var(--red);background:#fff4f1;}
+#choices button .bt{display:block; font-size:1rem; font-weight:800; letter-spacing:.06em;}
+#choices button .bd{display:block; font-size:.78rem; font-weight:400; color:var(--ink2); margin-top:2px;}
+#choices button:hover{transform:translate(1px,1px); box-shadow:2px 2px 0 rgba(0,0,0,.16); background:#fbf8ee;}
+#choices button.primary{background:var(--accent); color:#f6f2e6; text-align:center;}
+#choices button.primary .bd{color:#cfc9b8;}
+#choices button.primary:hover{background:#242018;}
+#choices button.small{font-size:.78rem; padding:7px 12px; font-weight:400; width:auto; box-shadow:2px 2px 0 rgba(0,0,0,.12);}
+#choices .btns .rowline{display:flex; gap:10px; flex-wrap:wrap;}
+#choices button.can{border-color:#2c6e2f; color:#245427; background:#eef4e4;}
+#choices button.cant{opacity:.42;}
+#choices button.risk{border-color:var(--red); color:var(--red); background:#fbf3ef;}
 #choices button:disabled{opacity:.35; cursor:default;}
-/* 數據專欄框 */
+/* 單一續行鈕 → 右下固定黑條 */
+#choices.fabbar{position:fixed; right:28px; bottom:24px; z-index:30; padding:0; background:none; width:min(420px,60%);}
+#choices.fabbar .hint{display:none;}
+#choices.fabbar button{
+  background:var(--accent); color:#f6f2e6; text-align:center; font-size:1rem; letter-spacing:.15em;
+  padding:15px 18px; box-shadow:4px 4px 0 rgba(0,0,0,.28); border-color:var(--accent);
+}
+#choices.fabbar button:hover{background:#242018;}
+/* 個人資料浮層 */
+#profileFab{
+  position:fixed; left:262px; bottom:20px; z-index:29; display:none;
+  width:44px; height:44px; border-radius:50%; border:2px solid var(--ink);
+  background:var(--paper2); font-size:1.2rem; cursor:pointer;
+  box-shadow:2px 3px 0 rgba(0,0,0,.25);
+}
+#profileFab:active{transform:translate(1px,1px);}
+#profileOverlay{display:none; position:fixed; inset:0; z-index:50; background:rgba(30,25,15,.45); overflow:auto; padding:18px 10px;}
+#profileOverlayInner{max-width:860px; margin:0 auto; background:var(--paper); border:2px solid var(--ink); box-shadow:4px 5px 0 rgba(0,0,0,.35); padding:12px 16px 18px;}
+#profileOverlayTop{display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--ink); padding-bottom:6px; margin-bottom:8px; font-size:.85rem; font-weight:700;}
+#profileOverlayTop button{border:1px solid var(--ink); background:var(--paper2); padding:4px 10px; cursor:pointer; font-size:.8rem;}
+.ov-head{font-size:1rem; font-weight:700; margin:4px 0 6px;}
+/* 數據格 */
 .statgrid{
   display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  gap:0; min-width:0; margin:8px 0; font-size:.85rem;
-  border:2px solid var(--rule);
-  font-family:"Noto Sans TC",sans-serif;
+  gap:0; min-width:0; margin:8px 0; font-size:.85rem; border:1.5px solid var(--rule);
 }
-.statgrid .cell{min-width:0; background:#fdfaf2; border:1px solid var(--line); padding:6px 9px; overflow-wrap:anywhere;}
+.statgrid .cell{min-width:0; background:#fbf8ee; border:1px solid var(--line); padding:6px 9px; overflow-wrap:anywhere;}
 .statgrid .cell b{color:var(--ink);}
 .ability-section-title{
   margin:12px 0 4px; padding:3px 7px; border-left:5px solid var(--sepia);
-  background:rgba(107,93,63,.09); font:.78rem/1.5 "Noto Sans TC","Microsoft JhengHei",sans-serif;
-  font-weight:800; letter-spacing:.08em;
+  background:rgba(107,93,63,.09); font:.78rem/1.5 "Noto Sans TC",sans-serif; font-weight:800; letter-spacing:.08em;
 }
 .ability-cell{display:flex;flex-direction:column;gap:2px;}
 .ability-label{font-size:.74rem;color:var(--ink2);font-weight:700;}
 .ability-value{font-size:1rem;display:flex;align-items:baseline;gap:5px;}
 .ability-cell small,.position-table small,.ability-note{font-size:.68rem;line-height:1.45;color:var(--ink2);font-weight:400;}
 .potential-cap{margin-top:1px;padding-top:2px;border-top:1px dotted var(--line);font-size:.68rem;color:var(--sepia);}
-.position-line{margin:7px 0;font:.8rem/1.6 "Noto Sans TC","Microsoft JhengHei",sans-serif;}
-.pos-tag{display:inline-block;border:1px solid var(--line);background:#fdfaf2;padding:1px 7px;font-size:.72rem;}
+.position-line{margin:7px 0;font:.8rem/1.6 "Noto Sans TC",sans-serif;}
+.pos-tag{display:inline-block;border:1px solid var(--line);background:#fbf8ee;padding:1px 7px;font-size:.72rem;}
 .pos-tag.primary{border:2px solid var(--rule);font-weight:800;}
 .position-table .is-primary{outline:2px solid var(--rule);outline-offset:-2px;background:#f7edcf;}
-.ability-guide{margin:9px 0;font:.76rem/1.5 "Noto Sans TC","Microsoft JhengHei",sans-serif;}
+.ability-guide{margin:9px 0;font:.76rem/1.5 "Noto Sans TC",sans-serif;}
 .ability-guide summary{cursor:pointer;color:var(--sepia);font-weight:700;}
 .rank-S{color:#8c1d7a;} .rank-A{color:#a02020;} .rank-B{color:#b45f14;}
 .rank-C{color:#8a7300;} .rank-D{color:#3c5a2a;} .rank-E{color:#1f5b8a;}
 .rank-F{color:#4a5866;} .rank-G{color:#7d7d72;}
-/* 生涯年表 */
 table.career{
   display:block; width:100%; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
-  border-collapse:collapse; font-size:.78rem; margin:8px 0; white-space:nowrap;
-  font-family:"Noto Sans TC",sans-serif; background:#fdfaf2;
+  border-collapse:collapse; font-size:.78rem; margin:8px 0; white-space:nowrap; background:#fbf8ee;
 }
 table.career tbody{display:table; width:100%; min-width:max-content;}
-table.career th, table.career td{ border:1px solid var(--line); padding:3px 6px; text-align:center;}
-table.career th{ background:var(--paper2); font-weight:700;}
-.trait-wrap{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;font-family:"Noto Sans TC",sans-serif;}
+table.career th, table.career td{border:1px solid var(--line); padding:3px 6px; text-align:center;}
+table.career th{background:var(--paper2); font-weight:700;}
+.trait-wrap{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
 .trait-tag{display:inline-block;border:1px solid #9b7415;background:#fff3bf;color:#5b4200;border-radius:999px;padding:2px 8px;font-size:.75rem;line-height:1.5;}
 .trait-tag.bad{border-color:#a02020;background:#f8dddd;color:#861717;}
 .trait-tag.ability{border-color:#355f7b;background:#e1eef5;color:#234b65;}
-.trait-book{margin:8px 0;font-family:"Noto Sans TC",sans-serif;font-size:.8rem;}
+.trait-book{margin:8px 0;font-size:.8rem;}
 .trait-book summary{cursor:pointer;color:var(--sepia);font-weight:700;}
 .trait-book .trait-locked{opacity:.48;}
 .trait-book .trait-on td:first-child{color:#3c5a2a;font-weight:700;}
-footer{padding:8px 16px 14px; font-size:.68rem; color:var(--ink2); text-align:center; border-top:1px solid var(--line); letter-spacing:1px;}
-input, textarea{
-  background:#fff; color:var(--ink); border:1px solid var(--rule);
-  font-family:inherit;
-}
-@media (max-width:560px){
-  :root{font-size:15px;}
-  header{padding:10px 12px 7px;}
-  header .row1{gap:8px; font-size:.66rem;}
-  header .row1 span{white-space:nowrap;}
-  header h1{font-size:1.6rem;}
-  header .slogan{line-height:1.45;}
-  #statusbar{
-    flex-wrap:nowrap; gap:0 12px; padding:6px 12px; line-height:1.55;
-    overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain;
-    scrollbar-width:thin; -webkit-overflow-scrolling:touch;
-  }
-  #statusbar>span{flex:0 0 auto; white-space:nowrap;}
-  #statusbar br{display:none;}
-  #log{padding:12px 12px;}
-  #log .head{font-size:1.15rem; letter-spacing:.08em;}
-  #log .subhead{letter-spacing:1px;}
-  #log .extra{letter-spacing:.1em;}
-  #choices{padding:9px 12px 13px;}
-  #choices .btns{display:grid; grid-template-columns:minmax(0,1fr);}
-  #choices button{width:100%; text-align:left;}
-  .statgrid{grid-template-columns:minmax(0,1fr);}
-  footer{padding-inline:12px; letter-spacing:.5px;}
+/* 創角表單 */
+.mkform{border:1.5px solid var(--rule); background:var(--card); padding:16px 20px; margin:8px 0;}
+.mkform label{display:block; font-size:.8rem; font-weight:800; letter-spacing:.15em; margin:12px 0 6px;}
+.mkrow{display:flex; gap:0;}
+.mkrow input{flex:1; min-width:0;}
+input, textarea{background:#fdfbf3; color:var(--ink); border:1.5px solid var(--red); font-family:inherit; padding:10px 12px; font-size:1rem;}
+input#inpNum{flex:0 0 110px; border-left:none; color:var(--red); font-weight:900; text-align:center;}
+.mkseed{font-size:.82rem; color:var(--ink2); margin-top:14px;}
+.mkseed input{padding:5px 10px; width:130px; font-family:"Courier New",monospace; color:var(--red); font-weight:700; text-align:center;}
+.mkseed a{color:var(--sepia); cursor:pointer; text-decoration:underline;}
+.mkview{font-size:.78rem; color:var(--ink2); margin-top:10px;}
+.mkview a{cursor:pointer; margin:0 6px; color:var(--ink2);}
+.mkview a.on{color:var(--red); font-weight:800;}
+footer{padding:8px 16px 14px; font-size:.68rem; color:var(--ink2); text-align:center; letter-spacing:1px;}
+@media (max-width:860px){
+  #app{grid-template-columns:minmax(0,1fr);}
+  #sidebar{position:static; height:auto; flex-direction:row; align-items:center; gap:14px; border-right:none; border-bottom:2px solid var(--rule); padding:12px 14px; overflow-x:auto;}
+  #brand h1{font-size:1.2rem;}
+  #brand .slogan{display:none;}
+  #timeline{flex-direction:row; border-left:none; margin:0; gap:2px;}
+  #timeline .tl{padding:2px 8px; font-size:.76rem;}
+  #timeline .tl::before{display:none;}
+  #seedFoot{margin:0 0 0 auto; white-space:nowrap;}
+  #statusbar{padding:10px 12px 6px;}
+  .hstat b{font-size:1.15rem;}
+  #detailPanel .dgrid{grid-template-columns:1fr;}
+  #log{padding:14px 12px 120px;}
+  #choices{padding:4px 12px 20px;}
+  #choices.fabbar{right:10px; bottom:12px; width:min(420px,80%);}
+  #profileFab{left:12px;}
 }
 </style>
 </head>
 <body>
-<div id="wrap">
-  <header>
-    <div class="row1"><span id="mastDate">—</span><span>NT$10</span><span id="mastIssue">創刊號</span></div>
-    <h1>野球人生報</h1>
-    <div class="slogan">─ 台灣文字棒球人生模擬・每一顆球都算數 ─</div>
-  </header>
-  <div id="statusbar"></div>
-  <button id="profileFab" onclick="toggleProfileOverlay()" title="個人資料">📋</button>
-  <div id="profileOverlay"><div id="profileOverlayInner">
-    <div id="profileOverlayTop"><span>選手個人資料（隨時可看・不影響進行）</span><button onclick="toggleProfileOverlay(false)">✕ 關閉</button></div>
-    <div id="profileOverlayBody"></div>
-  </div></div>
-  <div id="log"></div>
-  <div id="choices"></div>
-  <footer>同一個種子＋同樣的選擇＝同樣的野球人生。存檔碼可隨時匯出／匯入。</footer>
+<div id="app">
+  <aside id="sidebar">
+    <div id="brand">
+      <h1>野球人生報<span class="ball">⚾</span></h1>
+      <div class="slogan">棒球人生模擬器</div>
+    </div>
+    <div id="timelineWrap">
+      <div id="tlPhase"></div>
+      <div id="timeline"></div>
+    </div>
+    <div id="seedFoot"><span style="display:none" id="mastDate"></span><span style="display:none" id="mastIssue"></span><span id="seedLine"></span></div>
+  </aside>
+  <main id="mainCol">
+    <div id="hdrWrap">
+      <div id="statusbar"></div>
+      <div id="detailPanel"></div>
+    </div>
+    <div id="log"></div>
+    <div id="choices"></div>
+  </main>
 </div>
+<button id="profileFab" onclick="toggleProfileOverlay()" title="個人資料">📋</button>
+<div id="profileOverlay"><div id="profileOverlayInner">
+  <div id="profileOverlayTop"><span>選手個人資料（隨時可看・不影響進行）</span><button onclick="toggleProfileOverlay(false)">✕ 關閉</button></div>
+  <div id="profileOverlayBody"></div>
+</div></div>
 <script>
 /* ================= 核心引擎：PRNG / 狀態 / UI（報紙版） ================= */
 "use strict";
@@ -326,13 +377,74 @@ function newState(seed, name, pos){
 const $log = ()=>document.getElementById("log");
 const $ch  = ()=>document.getElementById("choices");
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+/* DOM stub 相容的 class 操作（測試環境節點沒有 classList） */
+function clsAdd(el,c){ if(!el)return; if(el.classList)el.classList.add(c); else if(String(el.className).indexOf(c)<0)el.className=(el.className?el.className+" ":"")+c; }
+function clsDel(el,c){ if(!el)return; if(el.classList)el.classList.remove(c); else el.className=String(el.className).split(" ").filter(x=>x&&x!==c).join(" "); }
+function clsHas(el,c){ if(!el)return false; if(el.classList)return el.classList.contains(c); return String(el.className).split(" ").indexOf(c)>=0; }
+/* ── 逐年收合的事件卡片流 ── */
+let __curCard=null, __curYearKey=null, __curYearBody=null; const __yearSecs=[];
+function __yearInfo(){
+  if(typeof S==="undefined"||!S)return null;
+  let stage="";
+  if(S.phase==="hs"){const g=Math.max(1,Math.min(3,Math.floor((S.turn||0)/40)+1));stage="高"+["一","二","三"][g-1];}
+  else if(S.phase==="grad")stage="畢業季";
+  else if(S.phase==="uni")stage="大"+["一","二","三","四"][Math.max(0,Math.min(3,(S.uniYear||1)-1))];
+  else if(S.phase==="pro")stage=S.team||"職業";
+  else if(S.phase==="done")stage="引退";
+  return {key:S.year+"|"+S.phase+"|"+stage, label:S.year+" 年 ・ "+S.age+" 歲 ・ "+stage, short:S.year+" "+stage};
+}
+function resetUIShell(){
+  __curCard=null;__curYearKey=null;__curYearBody=null;__yearSecs.length=0;
+  const tl=document.getElementById("timeline"); if(tl)tl.innerHTML="";
+  const tp=document.getElementById("tlPhase"); if(tp)tp.textContent="";
+  const dp=document.getElementById("detailPanel"); if(dp&&dp.style)dp.style.display="none";
+}
+function __ensureSection(){
+  const y=__yearInfo();
+  if(!y){__curYearBody=null;return $log();}
+  if(y.key!==__curYearKey){
+    __yearSecs.forEach(o=>{clsAdd(o.sec,"collapsed");clsDel(o.btn,"open");});
+    const sec=document.createElement("div"); sec.className="ysec";
+    const btn=document.createElement("button"); btn.className="year-divider open"; btn.textContent=y.label;
+    const body=document.createElement("div"); body.className="ysec-body";
+    btn.onclick=()=>{ if(clsHas(sec,"collapsed")){clsDel(sec,"collapsed");clsAdd(btn,"open");} else {clsAdd(sec,"collapsed");clsDel(btn,"open");} };
+    sec.appendChild(btn); sec.appendChild(body); $log().appendChild(sec);
+    __yearSecs.push({sec:sec,btn:btn});
+    __curYearKey=y.key; __curYearBody=body; __curCard=null;
+    const tl=document.getElementById("timeline");
+    if(tl&&tl.appendChild){
+      __yearSecs.forEach(o=>{ if(o.tlBtn)clsDel(o.tlBtn,"cur"); });
+      const t=document.createElement("button"); t.className="tl cur"; t.textContent=y.short;
+      t.onclick=()=>{ clsDel(sec,"collapsed");clsAdd(btn,"open"); if(sec.scrollIntoView)sec.scrollIntoView({block:"start"}); };
+      tl.appendChild(t); __yearSecs[__yearSecs.length-1].tlBtn=t;
+    }
+    const tp=document.getElementById("tlPhase");
+    if(tp)tp.textContent=S.phase==="hs"?("高中 ・ "+SCHOOL):S.phase==="uni"?("大學 ・ "+(S.uniName||"")):S.phase==="pro"?("職業 ・ "+(S.team||"")):S.phase==="grad"?"進路抉擇":S.phase==="done"?"引退":"";
+  }
+  return __curYearBody||$log();
+}
+function __cardFor(cls){
+  const host=__ensureSection();
+  if(cls==="head"||!__curCard||__curCard.__host!==host){
+    const card=document.createElement("div"); card.className="ycard"; card.__host=host;
+    host.appendChild(card); __curCard=card;
+  }
+  return __curCard;
+}
+let __scrollPend=false;
+function __scrollBottom(){ /* 每幀最多捲動一次：避免逐行強制 reflow 拖慢整頁 */
+  if(__scrollPend)return; __scrollPend=true;
+  const raf=(typeof window!=="undefined"&&window.requestAnimationFrame)?window.requestAnimationFrame:(typeof setTimeout==="function"?(f)=>setTimeout(f,16):(f)=>{f();});
+  raf(()=>{ __scrollPend=false;
+    try{ const l=$log(); l.scrollTop=l.scrollHeight; window.scrollTo(0,document.body.scrollHeight); }catch(e){}
+  });
+}
 function out(html, cls){
   const p=document.createElement("p");
   if(cls) p.className=cls;
   p.innerHTML=html;
-  $log().appendChild(p);
-  $log().scrollTop = $log().scrollHeight;
-  window.scrollTo(0, document.body.scrollHeight);
+  __cardFor(cls).appendChild(p);
+  __scrollBottom();
 }
 function story(t){ out(esc(t),"story"); }
 function sys(t){ out(esc(t),"sys"); }
@@ -345,23 +457,31 @@ function head(t, sub){
   if(sub) out(esc(sub),"subhead");
 }
 function extra(t){ out("【號外】"+esc(t),"extra"); }
-function hr(){ const e=document.createElement("hr"); $log().appendChild(e); }
+function hr(){ __curCard=null; }
 function gameLine(t,side){ out(esc(t), side==="B"?"gameB":"game"); }
 
 function choices(list, hint){
   const c=$ch(); c.innerHTML="";
+  const real=list.filter(Boolean);
+  if(real.length===1)clsAdd(c,"fabbar");else clsDel(c,"fabbar");
   if(hint){ const h=document.createElement("div"); h.className="hint"; h.textContent=hint; c.appendChild(h); }
   const bx=document.createElement("div"); bx.className="btns"; c.appendChild(bx);
   list.forEach((it,idx)=>{
     if(!it) return;
     const b=document.createElement("button");
-    b.textContent=it.label;
+    /* 「標題｜說明」→ 雙行選項卡片 */
+    const parts=String(it.label).split("｜");
+    if(parts.length>1&&real.length>1&&!it.small){
+      b.innerHTML='<span class="bt">'+esc(parts[0])+'</span><span class="bd">'+esc(parts.slice(1).join("｜"))+'</span>';
+      b.textContent===""&&(b.textContent=it.label); /* stub DOM fallback */
+      if(!b.innerHTML)b.textContent=it.label;
+    }else b.textContent=it.label;
     if(it.primary) b.className="primary";
     if(it.small) b.className="small";
     if(it.cls) b.className=(b.className?b.className+" ":"")+it.cls;
     b.onclick=()=>{
-      c.innerHTML="";
-      if(!it.noEcho) sys("▶ "+it.label);
+      c.innerHTML=""; clsDel(c,"fabbar");
+      if(!it.noEcho) sys("▶ "+String(it.label).split("｜")[0]);
       S && S.log.push(idx);
       it.fn();
     };
@@ -1561,8 +1681,10 @@ function renderTransactionsHTML(){
 
 /* ---- 報頭日期/狀態列 ---- */
 function mastReset(dateTxt, issueTxt){
-  document.getElementById("mastDate").textContent = dateTxt||"—";
-  document.getElementById("mastIssue").textContent = issueTxt||"";
+  const d=document.getElementById("mastDate"),i=document.getElementById("mastIssue");
+  if(d)d.textContent=dateTxt||"—"; if(i)i.textContent=issueTxt||"";
+  const sl=document.getElementById("seedLine");
+  if(sl)sl.innerHTML=(typeof S!=="undefined"&&S)?('SEED <b>'+esc(S.seed)+'</b><br>v2.0'):"v2.0";
 }
 function handLabel(){
   if(!S) return "";
@@ -1572,51 +1694,88 @@ function handLabel(){
 }
 function statusBar(){
   const sb=document.getElementById("statusbar");
-  if(!S){ sb.innerHTML=""; mastReset("","創刊號"); return; }
+  if(!sb)return;
+  if(!S){ sb.innerHTML=""; mastReset("",""); const dp=document.getElementById("detailPanel"); if(dp&&dp.style)dp.style.display="none"; const fab0=document.getElementById("profileFab"); if(fab0&&fab0.style)fab0.style.display="none"; return; }
   ensurePlayerSystems();
-  let dateTxt="", stage="";
-  if(S.phase==="hs"){
-    const t=CAL[Math.min(S.turn,CAL.length-1)];
-    dateTxt = t? ("民國"+(S.year-1911)+"年・"+t.label) : "";
-    stage = (t? ("高"+t.g+"　"+SCHOOL) : SCHOOL)+"・"+S.age+"歲・"+fieldPositionShort()+"・"+handLabel();
-    mastReset("西元"+S.year+"年", "第"+(S.turn+1)+"號");
-  }else{
-    dateTxt = "西元"+S.year+"年";
-    stage = (S.flags&&S.flags.onNationalDuty?("中華隊（徵召自"+(S.team||"")+"）"):(S.team||"")+(S.level?("・"+S.level):""))+"・"+S.age+"歲・"+fieldPositionShort();
-    mastReset("西元"+S.year+"年", S.age+"歲");
-  }
-  const hpCls = S.hp<35?"hp-low":"";
-  let ab;
-  if(S.pos==="P"){
-    const bkR=effRating("breakTotal",S);
-    ab = "球速 "+rk(gradeOfRating(effRating("velo",S)))+" <b>"+effRating("velo",S)+"</b>（"+S.velo+"km） ｜ 控球 "+rk(gradeOfRating(effRating("ctrl",S)))+" <b>"+effRating("ctrl",S)+"</b> ｜ 耐力 "+rk(gradeOfRating(effRating("stam",S)))+" <b>"+effRating("stam",S)+"</b>"
-       + " ｜ 變化球 "+rk(gradeOfRating(bkR))+" <b>"+bkR+"</b>（"+(pitchNames(S).join("・")||"未配備")+"）";
-    const role=S.phase==="pro"&&S.currentPitchRole?S.currentPitchRole:recommendPitchRole();
-    ab += "<br>⚾ 定位 <b>"+pitchRoleLabel(role)+"</b> ｜ 手臂 <b>"+armStatus()+"</b>（可用 "+Math.round(S.armHealth.readiness)+"／負荷 "+S.armHealth.load.toFixed(1)+"/"+armCap()+"）";
-    if(S.twoWay) ab += "<br>⚔ 打：彈道Lv<b>"+S.traj+"</b> "+["meet","power","eye","run","fld","clutch"].map(k=>({meet:"接觸",power:"力量",eye:"選球",run:"速",fld:"守",clutch:"膽"})[k]+" "+rk(gradeOfRating(effRating(k,S)))+" <b>"+effRating(k,S)+"</b>").join(" ");
-  }else{
-    ab = "彈道 Lv<b>"+S.traj+"</b> "+["meet","power","eye","run","fld","stam","clutch"].map(k=>({meet:"接觸",power:"力量",eye:"選球",run:"速度",fld:"守備",stam:"體力",clutch:"膽識"})[k]+" "+rk(gradeOfRating(effRating(k,S)))+" <b>"+effRating(k,S)+"</b>").join(" ");
-  }
-  const sName = S.twoWay?"變/敏":S.pos==="P"?"變":"敏";
-  const ail = S.ailments.length? "<b class='hp-low'>【"+S.ailments.join("/")+"】</b>" : "";
-  let extraSeg;
-  if(S.phase==="hs"){
-    extraSeg = "<span>點數 筋<b>"+S.expK+"</b> 技<b>"+S.expG+"</b> "+sName+"<b>"+S.expS+"</b></span>"
-      +"<span>教練評價<b>"+S.evCoach+"</b>　學業"+(S.study<50?"<b class='hp-low'>"+S.study+"（禁賽線50）</b>":"<b>"+S.study+"</b>")+"</span>"
-      +"<span>球探 中職<b>"+S.scout.cpbl+"</b> 日職<b>"+S.scout.npb+"</b> 美職<b>"+S.scout.mlb+"</b></span>";
-  }else{
-    const ct=S.contract,ctText=ct?("　合約剩<b>"+ct.yearsLeft+"年</b>"):"";
-    extraSeg = "<span>綜合戰力<b>"+overall()+"</b>　知名度<b>"+S.fame+"</b></span>"
-      +"<span>年薪<b>"+fmtMoney(S.salary)+"</b>"+ctText+"　生涯收入<b>"+fmtMoney(S.earnings)+"</b></span>";
-  }
-  sb.innerHTML =
-    "<span>📰 <b>"+dateTxt+"</b>　"+stage+" "+ail+"</span>"
-   +"<span>體力 <b class='"+hpCls+"'>"+S.hp+"</b>/"+S.maxHp+"</span>"
-   +"<span>狀態 <b>"+moodName(S.yaruki)+"</b></span>"
-   +"<span>"+ab+"</span>"
-   + extraSeg;
+  if(!S.jersey){ const h=xmur3(String(S.seed)+"#"+String(S.name)); S.jersey=(h()%98)+1; }
+  /* 徽章 */
+  const posName=S.twoWay?"二刀流":S.pos==="P"?"投手":S.fieldPos==="C"?"捕手":["1B","2B","3B","SS"].includes(S.fieldPos)?"內野手":"外野手";
+  let talentTag="";
+  try{ const pk=S.pos==="P"?["velo","ctrl","stam"]:["meet","power","run"]; const best=Math.max.apply(null,pk.map(k=>ratingOf(k,potentialCap(k,S))));
+    talentTag=best>=125?"天賦異稟":best>=108?"潛力股":""; }catch(e){}
+  /* 所屬 */
+  let team="",lv="";
+  if(S.phase==="hs"){ team=SCHOOL; lv="高"+["一","二","三"][Math.max(0,Math.min(2,Math.floor((S.turn||0)/40)))]; }
+  else if(S.phase==="grad"){ team=SCHOOL; lv="畢業"; }
+  else if(S.phase==="uni"){ team=S.uniName||"大學"; lv="大"+["一","二","三","四"][Math.max(0,Math.min(3,(S.uniYear||1)-1))]; }
+  else { team=S.flags&&S.flags.onNationalDuty?("中華隊（徵召自"+(S.team||"")+"）"):(S.team||""); lv=S.level||""; }
+  /* 階段圓點 */
+  let dot=1;
+  if(S.phase==="hs"){ const w=(S.turn||0)%40; dot=w<6?0:w>=34?2:1; }
+  else if(S.phase==="pro"&&S.sea){ dot=S.sea.i<=0?0:(S.sea.i>=S.sea.total?2:1); }
+  else if(S.phase==="grad")dot=2;
+  const dots=["季初","賽季中","季末"].map((t,i)=>'<span class="'+(i===dot?"on":"")+'">'+t+"</span>").join("");
+  /* 統計盒 */
+  const ov=(typeof overall==="function")?overall():0;
+  const boxes='<div class="hstat"><b>'+S.age+'</b><i>年齡</i></div>'
+    +'<div class="hstat"><b>'+S.year+'</b><i>年份</i></div>'
+    +'<div class="hstat"><b>'+ov+'</b><i>綜合</i></div>'
+    +'<div class="hstat"><b class="red">'+(S.earnings||0)+'</b><i>生涯薪(萬)</i></div>'
+    +'<button id="detailBtn" onclick="toggleDetailPanel()">詳情<br>⌄</button>';
+  /* 次列 */
+  const hpCls=S.hp<35?"hp-low":"";
+  const sName=S.twoWay?"變/敏":S.pos==="P"?"變":"敏";
+  let sub='<span>體力 <b class="'+hpCls+'">'+S.hp+'</b>/'+S.maxHp+'</span><span>狀態 <b>'+moodName(S.yaruki)+'</b></span>'
+    +'<span>點數 筋<b>'+S.expK+'</b> 技<b>'+S.expG+'</b> '+sName+'<b>'+S.expS+'</b></span>';
+  if(S.pos==="P")sub+='<span>手臂 <b>'+armStatus()+'</b>（可用'+Math.round(S.armHealth.readiness)+'／負荷'+S.armHealth.load.toFixed(0)+'/'+armCap()+'）</span>';
+  if(S.phase==="hs")sub+='<span>學業 '+(S.study<50?'<b class="hp-low">'+S.study+'（禁賽線50）</b>':'<b>'+S.study+'</b>')+'</span><span>球探 中<b>'+S.scout.cpbl+'</b> 日<b>'+S.scout.npb+'</b> 美<b>'+S.scout.mlb+'</b></span>';
+  if(S.phase==="pro"&&S.contract)sub+='<span>年薪 <b>'+fmtMoney(S.salary)+'</b>・合約剩<b>'+S.contract.yearsLeft+'</b>年</span>';
+  if(S.ailments.length)sub+='<span class="hp-low"><b>【'+S.ailments.join("/")+'】</b></span>';
+  sb.innerHTML=
+    '<div class="hdr-top"><span class="noBadge">NO.<b>'+S.jersey+'</b></span>'
+    +'<div class="hdr-name"><span class="nm">'+esc(S.name)+'</span><span class="hdr-badges"><span>'+posName+'</span>'+(talentTag?('<span class="tag">'+talentTag+'</span>'):"")+'</span></div>'
+    +'<div class="hdr-right"><span>所屬'+(S.phase==="hs"?"學校":"球隊")+'<br><span class="team">'+esc(team)+'</span>'+(lv?('<span class="lv">'+esc(lv)+'</span>'):"")+'</span>'
+    +'<button id="menuBtn" onclick="toggleProfileOverlay()">☰</button></div></div>'
+    +'<div class="hdr-stats">'+boxes+'</div>'
+    +'<div class="hdr-dots">'+dots+'</div>'
+    +'<div class="hdr-sub">'+sub+'</div>';
+  mastReset("","");
   const fab=document.getElementById("profileFab");
   if(fab&&fab.style)fab.style.display=S?"block":"none";
+  const dp=document.getElementById("detailPanel");
+  if(dp&&dp.style&&dp.style.display==="block")dp.innerHTML=detailPanelHTML();
+}
+/* 詳情面板：成就／薪資／隱藏屬性／逐年成績 */
+function detailPanelHTML(){
+  if(!S)return "";
+  const honors=(S.honors||[]).slice(-10);
+  const hHtml=honors.length?honors.map(h=>"・"+esc(String(h))).join("<br>"):"還沒有拿過任何獎項。";
+  const ct=S.contract;
+  const sal='<div class="kv"><span>現行合約</span><span class="v">'+(ct?(fmtMoney(S.salary)+"／年・剩"+ct.yearsLeft+"年"):"−")+'</span></div>'
+    +'<div class="kv"><span>球隊年資</span><span class="v">'+(S.phase==="pro"?((S.leagueYears||0)+"年"):"−")+'</span></div>'
+    +'<div class="kv total"><span>生涯累計</span><span class="v">'+fmtMoney(S.earnings||0)+'</span></div>';
+  let traitsTxt="還沒有覺醒任何隱藏屬性。";
+  try{
+    const on=Object.keys(S.traits||{}).filter(k=>S.traits[k]&&TRAIT_META[k]).map(k=>TRAIT_META[k].n);
+    if(on.length)traitsTxt=on.map(n=>'<span class="trait-tag">'+esc(n)+'</span>').join(" ");
+  }catch(e){}
+  let yearsTxt="還沒有完整打過一個球季。";
+  if(S.proYears&&S.proYears.length){
+    yearsTxt='<table class="career"><tr><th>年度</th><th>年齡</th><th>球隊</th><th>成績</th></tr>'
+      +S.proYears.slice(-8).map(y=>'<tr><td>'+y.year+'</td><td>'+y.age+'</td><td>'+esc(y.team||"")+'</td><td>'+esc(y.line||"")+'</td></tr>').join("")+'</table>';
+  }
+  return '<div class="dgrid">'
+    +'<div class="dsec"><h4>目前成就</h4>'+hHtml+'</div>'
+    +'<div class="dsec"><h4>薪資</h4>'+sal+'</div>'
+    +'<div class="dsec"><h4>隱藏屬性</h4>'+traitsTxt+'</div>'
+    +'<div class="dsec"><h4>生涯逐年成績</h4>'+yearsTxt+'</div>'
+    +'</div>';
+}
+function toggleDetailPanel(force){
+  const dp=document.getElementById("detailPanel"); if(!dp||!dp.style)return;
+  const show=force!=null?force:dp.style.display!=="block";
+  if(show&&S){ dp.innerHTML=detailPanelHTML(); dp.style.display="block"; }
+  else dp.style.display="none";
 }
 /* ---- 隨時可開的個人資料浮動面板（不動報紙內文，比賽中也能看） ---- */
 function profileOverlayHTML(){
@@ -1725,6 +1884,7 @@ function saveCode(){
   return btoa(unescape(encodeURIComponent(JSON.stringify(S))));
 }
 function loadCode(code){
+  if(typeof resetUIShell==="function")resetUIShell();
   try{
     const o=JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
     if(!o || !o.seed) throw 0;
@@ -1905,7 +2065,7 @@ function actionMenu(){
   if(S.hp<30) sys("身體很沉重……體力過低時練習容易受傷。");
   if(S.pos==="P"){
     sys("投手報告："+pitchRoleLabel(recommendPitchRole())+"｜"+armStatus()+"｜短期可用"+Math.round(S.armHealth.readiness)+"／長期負荷"+S.armHealth.load.toFixed(1)+"/"+armCap());
-    if(!staminaStarterEligible())sys("耐力仍是 "+rankPow(S.stam)+"：固定先發門檻為 C（110），目前由牛棚登板。");
+    if(!staminaStarterEligible())sys("耐力評級 "+ratingOf("stam",S.stam)+"：固定先發門檻為 60，目前由牛棚登板。");
   }
   const list=[];
   const sN = S.twoWay?"變/敏":S.pos==="P"?"變":"敏";
@@ -1939,6 +2099,8 @@ function actionMenu(){
   list.push({label:pLabel("伸展保養","str")+"・體力+", fn:()=>practice("str")});
   list.push({label:"讀書｜學業+（可選強度）", fn:studyMenu});
   list.push({label:"休息｜體力+32~48", fn:doRest});
+  if(S.flags.cardWeek!==S.turn){S.flags.cardWeek=S.turn;S.flags.cardsLeft=1;}
+  if(S.flags.cardsLeft>0)list.push({label:"🎴 抽事件卡（剩"+S.flags.cardsLeft+"張）｜突發事件三檔應對・不耗回合",fn:()=>{S.flags.cardsLeft--;hsEventCard(actionMenu);}});
   list.push({label:"出去晃晃", fn:urotsukiMenu});
   list.push({label:"聯絡・約會", fn:phoneMenu});
   list.push({label:"能力強化（不耗回合）", fn:()=>allocMenu(actionMenu)});
@@ -1992,7 +2154,7 @@ function practice(kind){
     {label:"保守練｜效果×0.7・體力消耗低・幾乎不受傷",fn:()=>practiceWith(kind,"safe")},
     {label:"照表練｜標準效果",primary:true,fn:()=>practiceWith(kind,"std")},
     {label:"梭哈特訓｜效果×1.6・體力×1.5・受傷率大增，失敗恐扣點數",cls:"risk",fn:()=>practiceWith(kind,"allin")},
-  ],"「"+(d.label||kind)+"」要用什麼強度？（狀態與健康運會影響梭哈的風險）");
+  ],"「"+(d.n||kind)+"」要用什麼強度？（狀態與健康運會影響梭哈的風險）");
 }
 function practiceWith(kind,tier){
   if(kind!=="str")noteStyleChoice(tier);
@@ -2149,9 +2311,14 @@ function currentBreakTotal(state){
   state=state||S;
   return Object.values(state.breaks||{}).reduce((sum,lv)=>sum+Math.max(0,Number(lv)||0),0);
 }
+const ALLOC_SNAP_KEYS=["expK","expG","expS","traj","meet","power","run","fld","eye","clutch","stam","velo","ctrl"];
 function allocMenu(back){
-  hr(); head("能力強化專欄");
+  hr(); head("能力強化專欄","點骰套用｜可隨時「復原」回到進場狀態，「確認」離開");
   if(typeof ensurePotentialCaps==="function")ensurePotentialCaps(S);
+  if(!window.__allocSnap){
+    const snap={};ALLOC_SNAP_KEYS.forEach(k=>snap[k]=S[k]);snap.breaks=JSON.parse(JSON.stringify(S.breaks||{}));
+    window.__allocSnap=snap;
+  }
   const sName = S.twoWay?"變化／敏捷（共用）":S.pos==="P"?"變化":"敏捷";
   sys("持有點數　筋力"+S.expK+"　技術"+S.expG+"　"+sName+S.expS);
   const sense = S.abil.includes("センス○")?0.87 : 1;
@@ -2219,7 +2386,12 @@ function allocMenu(back){
       });
     }
   }
-  list.push({label:"↩ 返回", fn:back, primary:true, noEcho:true});
+  list.push({label:"↩ 復原", small:true, noEcho:true, fn:()=>{
+    const snap=window.__allocSnap;
+    if(snap){ ALLOC_SNAP_KEYS.forEach(k=>{S[k]=snap[k];}); S.breaks=JSON.parse(JSON.stringify(snap.breaks||{})); sys("已復原到進場時的狀態。"); statusBar(); }
+    allocMenu(back);
+  }});
+  list.push({label:"確認 ▸", fn:()=>{ window.__allocSnap=null; back(); }, primary:true, noEcho:true});
   const abilHint=S.abil.length?("特殊能力："+S.abil.join("、")):"";
   choices(list, "評級 1-140：C100=中職級、B110=日職級、A120=美職級、S130=歷史級。軟帽制：個人潛力內正常價，超越後成本×4；全域硬帽140（道具／稱號加成可推到150）。"
     +(S.twoWay?"　投打升級共用同一批點數，強化一面就會犧牲另一面的成長。":"")
@@ -4338,11 +4510,18 @@ function uniYear(){
   if(S.uniYear>4){ uniGraduate(); return; }
   hr(); head("大學第"+S.uniYear+"年", S.uniName+"・大專棒球聯賽");
   rollSeasonDice("大學第"+S.uniYear+"年運勢擲骰");
-  choices([
-    {label:"棒球漬け（特訓為主）", fn:()=>uniTrain(1.3,0)},
-    {label:"文武兼修", fn:()=>uniTrain(1.0,8)},
-    {label:"以學業為重", fn:()=>uniTrain(0.7,16)},
-  ],"這一年的重心？");
+  const uniMenu=()=>{
+    if(S.flags.cardUniYear!==S.uniYear){S.flags.cardUniYear=S.uniYear;S.flags.cardsLeftUni=3;}
+    const ul=[
+      {label:"棒球漬け（特訓為主）｜訓練×1.3", fn:()=>uniTrain(1.3,0)},
+      {label:"文武兼修｜訓練×1.0・學業+8", fn:()=>uniTrain(1.0,8)},
+      {label:"以學業為重｜訓練×0.7・學業+16", fn:()=>uniTrain(0.7,16)},
+    ];
+    if(S.flags.cardsLeftUni>0)ul.push({label:"🎴 抽事件卡（剩"+S.flags.cardsLeftUni+"張）｜大學生活突發・不耗年度",small:true,fn:()=>{S.flags.cardsLeftUni--;hsEventCard(uniMenu);}});
+    ul.push({label:"能力強化（不耗年度）",small:true,fn:()=>allocMenu(uniMenu)});
+    choices(ul,"這一年的重心？");
+  };
+  uniMenu();
   function uniTrain(mult, st){
     if(S.flags.uniTier==="elite")mult*=1.1; // 名門的運科資源
     /* 大學一年折算數次主項訓練計數（特訓年4次、均衡3次、學業年2次） */
@@ -4658,6 +4837,10 @@ function proMonthAction(mLabel, monthGames){
   list.push({label:"重量訓練｜筋10 變/敏3・疲勞+5", fn:()=>act(()=>{ const m=spGain(10,0,3); S.fatigue=Math.min(100,S.fatigue+5); practiceMilestoneTick("kin"); gain(m+"（疲勞+5）"); })});
   list.push({label:"影片研究對手"+(S.flags.analyst?"（小黑加成）":""), fn:()=>act(()=>{ S.sea.monthPerf=S.flags.analyst?0.09:0.06; S.expG+=6; practiceMilestoneTick(S.pos==="P"?"henka":"knock"); gain("技術+6　本月比賽表現+"+(S.flags.analyst?"+（小黑的逐格分析！）":"（研究奏效）")); })});
   list.push({label:"徹底保養", fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); if(S.pos==="P"){recoverArm(7,true);S.traitCounters.careActions++;} practiceMilestoneTick("str"); gain("疲勞-22、體力+20"+(S.pos==="P"?"、手臂回復":"")); })});
+  (()=>{ const mk=S.year*100+(S.sea?S.sea.mi:0);
+    if(S.flags.cardMonth!==mk){S.flags.cardMonth=mk;S.flags.cardsLeftPro=2;}
+    if(S.flags.cardsLeftPro>0)list.push({label:"🎴 抽事件卡（剩"+S.flags.cardsLeftPro+"張）｜場外突發三檔應對・不耗行動",fn:()=>{S.flags.cardsLeftPro--;proEventCard(()=>proMonthAction(mLabel,monthGames));}});
+  })();
   if(S.gf||S.married){
     list.push({label:S.married?"陪伴家人":"與"+GF[S.gf].name+"約會", fn:()=>act(()=>{ yarukiUp(2); S.fatigue=Math.max(0,S.fatigue-12); gain("狀態+2、疲勞-12（心的充電）"); })});
   }
@@ -6421,7 +6604,7 @@ function finalCard(){
 /* ================= 頭版 / 初始化 ================= */
 function startScreen(){
   S=null; statusBar();
-  $log().innerHTML="";
+  $log().innerHTML=""; if(typeof resetUIShell==="function")resetUIShell();
   head("創刊號・你的野球人生", "從海線高中的長草外野，到世界的舞台");
   story("這是一款台灣背景的純文字棒球人生模擬遊戲。");
   sys("・高中三年（每週制）：練習、讀書、戀愛、黑豹旗、木棒聯賽、邀請賽與縣市代表賽。\n・比賽全自動：由能力值×特性×左右對決×狀態加權擲骰，呈現報紙式戰報；特性從表現自動養成。\n"
@@ -6439,21 +6622,34 @@ function startScreen(){
     }, noEcho:true},
   ]);
 }
+function uiReseed(){ const el=document.getElementById("inpSeed"); if(el)el.value=randSeed(); }
+function uiSkin(mode,ev){
+  document.body.className=mode==="news"?"skin-news":mode==="wide"?"wide":"";
+  document.querySelectorAll(".mkview a").forEach(a=>clsDel(a,"on"));
+  if(ev&&ev.target)clsAdd(ev.target,"on");
+}
 function setupName(urlSeed){
-  hr(); head("選手登錄", "海線高中棒球隊・入隊申請書");
+  hr(); head("選手登錄", "高中三年養成 → 選秀・旅日・旅美 → 國際賽 → 衰退與引退。每一顆骰子都算數。");
   const seed = urlSeed || randSeed();
-  out('姓名：<input id="inpName" maxlength="8" placeholder="林海" style="padding:6px;font-size:.95rem;width:140px;">　'
-     +'種子：<input id="inpSeed" value="'+esc(seed)+'" maxlength="16" style="padding:6px;font-size:.95rem;width:120px;">',"sys");
+  const defNo=(xmur3("no#"+seed)()%98)+1;
+  out('<div class="mkform">'
+     +'<label>球員資料</label>'
+     +'<div class="mkrow"><input id="inpName" maxlength="8" placeholder="林海"><input id="inpNum" maxlength="2" value="'+defNo+'" title="背號"></div>'
+     +'<label>守位</label><div class="sys" style="margin:-2px 0 4px">點選守位即開始生涯 ▸ 高一春天（之後選投打、慣用手與球種配備）</div>'
+     +'<div class="mkseed">世界種子 <input id="inpSeed" value="'+esc(seed)+'" maxlength="16">　・ <a onclick="uiReseed()">換一個</a><br><span style="font-size:.75rem">相同種子＋相同選擇＝相同人生（可直接輸入朋友的種子碼）</span></div>'
+     +'<div class="mkview">▸ 顯示設定　<a onclick="uiSkin(\'news\',event)">報紙版面</a> ・ <a class="on" onclick="uiSkin(\'std\',event)">標準</a> ・ <a onclick="uiSkin(\'wide\',event)">電腦版</a></div>'
+     +'</div>',"story");
   choices([
-    {label:"投手（球速×控球×變化）", fn:()=>go("P"), noEcho:true},
-    {label:"捕手（蹲捕配球：全隊失分抑制、配球養成加速）", fn:()=>go("C"), noEcho:true},
-    {label:"內野手（守備與反應的戰場）", fn:()=>go("IF"), noEcho:true},
-    {label:"外野手（腳程與肩力的舞台）", fn:()=>go("OF"), noEcho:true},
-    {label:"二刀流（投打雙修｜體力上限較低、練習負荷較高）", fn:()=>go("TW"), noEcho:true},
-  ],"選擇你的路線（守位之後可因守備門檻被迫轉換，捕手崩壞鏈：C→1B→DH）：");
+    {label:"投手｜球速×控球×變化球", fn:()=>go("P"), noEcho:true},
+    {label:"捕手｜蹲捕配球：全隊失分抑制、配球養成加速", fn:()=>go("C"), noEcho:true},
+    {label:"內野手｜守備與反應的戰場", fn:()=>go("IF"), noEcho:true},
+    {label:"外野手｜腳程與守備範圍的舞台", fn:()=>go("OF"), noEcho:true},
+    {label:"二刀流｜投打雙修：體力上限較低、練習負荷較高", fn:()=>go("TW"), noEcho:true},
+  ],"守位之後可因守備門檻被迫轉換（捕手崩壞鏈：C→1B→DH）。");
   function go(cat){
     const nm=(document.getElementById("inpName").value.trim())||"林海";
     const sd=(document.getElementById("inpSeed").value.trim())||seed;
+    const noEl=document.getElementById("inpNum"); window.__pickNo=Math.max(0,Math.min(99,Number(noEl&&noEl.value)||0))||null;
     const pos=(cat==="P"||cat==="TW")?cat:"B";
     if(pos==="B"){
       choices([
@@ -6515,8 +6711,10 @@ function choosePitchLoadout(n,done){
   })),"球種是「配備」不是各自練等：威力全看你的「變化球」評級。滑球剋同側、變速剋異側且省力、指叉三振多但傷手臂、伸卡滾地機器、曲球均衡。");
 }
 function initGame(seed, name, pos, hd){
+  if(typeof resetUIShell==="function")resetUIShell();
   seedRNG(seed, 0);
   S=newState(seed, name, pos);
+  if(window.__pickNo)S.jersey=window.__pickNo;
   if(hd){ S.hand=hd.hand||"R"; S.throwHand=hd.throwHand||"R"; }
   S.twoWay=!!(hd&&hd.twoWay);
   S.fieldPos=pos==="P"?"P":((hd&&hd.fieldPos)||"CF");
