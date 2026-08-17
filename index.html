@@ -139,6 +139,12 @@ body.wide #app{max-width:1900px;}
 #choices{padding:4px 26px 26px; background:var(--paper);}
 #choices .hint{font-size:.78rem; color:var(--ink2); margin:0 0 10px; line-height:1.7;}
 #choices .btns{display:flex; flex-direction:column; gap:10px; min-width:0;}
+/* 多選項（行動選單類）→ 緊湊並排格狀 */
+#choices .btns.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:8px;}
+#choices .btns.grid button{padding:9px 12px;}
+#choices .btns.grid button .bt{font-size:.9rem;}
+#choices .btns.grid button .bd{font-size:.72rem; margin-top:1px;}
+#choices .btns.grid button.small{padding:6px 10px;}
 #choices button{
   width:100%; text-align:left; background:var(--card); color:var(--ink);
   border:1.5px solid var(--rule); padding:12px 16px; font-size:.92rem; cursor:pointer;
@@ -160,6 +166,16 @@ body.wide #app{max-width:1900px;}
 #choices button.cant{opacity:.42;}
 #choices button.risk{border-color:var(--red); color:var(--red); background:#fbf3ef;}
 #choices button:disabled{opacity:.35; cursor:default;}
+/* 抽事件卡固定黑條（獨立於選單） */
+#cardFab{
+  display:none; position:fixed; right:28px; bottom:88px; z-index:31;
+  background:var(--accent); color:#f6f2e6; border:none; cursor:pointer;
+  width:min(420px,60%); padding:14px 18px; text-align:center;
+  font:800 1rem/1.4 "Noto Sans TC",sans-serif; letter-spacing:.12em;
+  box-shadow:4px 4px 0 rgba(0,0,0,.28);
+}
+#cardFab:hover{background:#242018;}
+@media (max-width:860px){ #cardFab{right:10px; bottom:76px; width:min(420px,80%);} }
 /* 單一續行鈕 → 右下固定黑條 */
 #choices.fabbar{position:fixed; right:28px; bottom:24px; z-index:30; padding:0; background:none; width:min(420px,60%);}
 #choices.fabbar .hint{display:none;}
@@ -170,7 +186,8 @@ body.wide #app{max-width:1900px;}
 #choices.fabbar button:hover{background:#242018;}
 /* 個人資料浮層 */
 #profileFab{
-  position:fixed; left:262px; bottom:20px; z-index:29; display:none;
+  display:none !important; /* 頂列 ☰ 已提供個人資料入口 */
+  position:fixed; left:262px; bottom:20px; z-index:29;
   width:44px; height:44px; border-radius:50%; border:2px solid var(--ink);
   background:var(--paper2); font-size:1.2rem; cursor:pointer;
   box-shadow:2px 3px 0 rgba(0,0,0,.25);
@@ -460,12 +477,27 @@ function extra(t){ out("【號外】"+esc(t),"extra"); }
 function hr(){ __curCard=null; }
 function gameLine(t,side){ out(esc(t), side==="B"?"gameB":"game"); }
 
+/* 抽事件卡固定鈕：由各階段選單在呼叫 choices() 前設定，獨立於選項清單之外 */
+function setCardDraw(label, fn){ window.__cardDraw={label:label, fn:fn}; }
+function renderCardFab(){
+  let el=document.getElementById("cardFab");
+  const cd=window.__cardDraw;
+  if(!cd){ if(el&&el.style)el.style.display="none"; return; }
+  if(!el){
+    el=document.createElement("button"); el.id="cardFab";
+    if(document.body&&document.body.appendChild)document.body.appendChild(el);
+  }
+  el.innerHTML='🎴 '+esc(cd.label);
+  if(el.style)el.style.display="block";
+  el.onclick=()=>{ const fn=cd.fn; window.__cardDraw=null; renderCardFab(); fn(); };
+}
 function choices(list, hint){
   const c=$ch(); c.innerHTML="";
+  renderCardFab(); window.__cardDraw=null; /* 用完即清：下個選單需重新宣告 */
   const real=list.filter(Boolean);
   if(real.length===1)clsAdd(c,"fabbar");else clsDel(c,"fabbar");
   if(hint){ const h=document.createElement("div"); h.className="hint"; h.textContent=hint; c.appendChild(h); }
-  const bx=document.createElement("div"); bx.className="btns"; c.appendChild(bx);
+  const bx=document.createElement("div"); bx.className="btns"+(real.length>=5?" grid":""); c.appendChild(bx);
   list.forEach((it,idx)=>{
     if(!it) return;
     const b=document.createElement("button");
@@ -2014,20 +2046,20 @@ function summerCamp(){
     story("移地訓練結束後沒有直接收假。海線靠上學年成績拿到八月金龍盃名額，這是新陣容在秋季前的第一次檢驗。");
     const key="HS.GOLD_DRAGON_CUP",edition=key+"."+S.year,grade=finishedGrade+1;
     startMatch({competitionKey:key,editionKey:edition,roundKey:"GROUP",matchKey:S.seed+"::"+key+"::"+S.year+"::GROUP",
-      name:"金龍盃分組賽",foe:"谷保家商",foeStr:6,innings:5,mustDecide:true,onEnd:(win)=>{
+      name:"金龍盃分組賽",foe:"谷保家商",foeStr:6,innings:9,mustDecide:true,onEnd:(win)=>{
         if(win){S.hsRecord.w++;S.fame+=5;S.scout.cpbl+=3;story("分組賽突圍，海線取得第二場邀請賽資格。");
           startMatch({competitionKey:key,editionKey:edition,roundKey:"ADVANCEMENT",matchKey:S.seed+"::"+key+"::"+S.year+"::ADVANCEMENT",
-            name:"金龍盃晉級戰",foe:"平鎮高中",foeStr:7,innings:5,mustDecide:true,onEnd:(w2)=>{
+            name:"金龍盃晉級戰",foe:"平鎮高中",foeStr:7,innings:9,mustDecide:true,onEnd:(w2)=>{
               if(!w2){S.hsRecord.l++;S.fame+=2;beginNextGrade();return;}
               S.hsRecord.w++;S.fame+=8;S.scout.cpbl+=5;S.honors.push("高"+grade+"金龍盃晉級");
               recoverArm(2,false);
               next("四強戰",()=>startMatch({competitionKey:key,editionKey:edition,roundKey:"SEMIFINAL",matchKey:S.seed+"::"+key+"::"+S.year+"::SEMIFINAL",
-                name:"金龍盃四強",foe:"西苑高中",foeStr:8,innings:5,mustDecide:true,onEnd:(w3)=>{
+                name:"金龍盃四強",foe:"西苑高中",foeStr:8,innings:9,mustDecide:true,onEnd:(w3)=>{
                   if(!w3){S.hsRecord.l++;S.fame+=4;S.scout.cpbl+=2;story("四強止步。八月的太陽很毒，但這支新陣容已經被看見了。");beginNextGrade();return;}
                   S.hsRecord.w++;S.fame+=10;S.scout.cpbl+=6;S.scout.npb+=3;
                   recoverArm(2,false);
                   next("冠軍戰",()=>startMatch({competitionKey:key,editionKey:edition,roundKey:"FINAL",matchKey:S.seed+"::"+key+"::"+S.year+"::FINAL",
-                    name:"金龍盃冠軍戰",foe:"北都工商",foeStr:9,innings:6,mustDecide:true,onEnd:(w4)=>{
+                    name:"金龍盃冠軍戰",foe:"北都工商",foeStr:9,innings:9,mustDecide:true,onEnd:(w4)=>{
                       if(w4){S.hsRecord.w++;S.fame+=15;S.scout.cpbl+=8;S.scout.npb+=5;S.scout.mlb+=3;S.honors.push("高"+grade+"金龍盃冠軍");
                         const m=spGain(6,6,6);gain("暑期冠軍的養分："+m);
                         grantGear("金龍盃冠軍釘鞋",{flat:{run:2}});}
@@ -2100,7 +2132,7 @@ function actionMenu(){
   list.push({label:"讀書｜學業+（可選強度）", fn:studyMenu});
   list.push({label:"休息｜體力+32~48", fn:doRest});
   if(S.flags.cardWeek!==S.turn){S.flags.cardWeek=S.turn;S.flags.cardsLeft=1;}
-  if(S.flags.cardsLeft>0)list.push({label:"🎴 抽事件卡（剩"+S.flags.cardsLeft+"張）｜突發事件三檔應對・不耗回合",fn:()=>{S.flags.cardsLeft--;hsEventCard(actionMenu);}});
+  if(S.flags.cardsLeft>0)setCardDraw("抽事件卡（剩"+S.flags.cardsLeft+"張）",()=>{S.flags.cardsLeft--;hsEventCard(actionMenu);});
   list.push({label:"出去晃晃", fn:urotsukiMenu});
   list.push({label:"聯絡・約會", fn:phoneMenu});
   list.push({label:"能力強化（不耗回合）", fn:()=>allocMenu(actionMenu)});
@@ -2619,6 +2651,13 @@ function simulateGame(){
       swapped=true; foeStr=Math.max(3,foeStr-1);
       M.foeProfile=genFoeProfile(foeStr);
       gameLine("🔁 對方先發被磨垮退場——中繼是【"+handTxt(M.foeProfile.hand)+"投・"+M.foeProfile.type+"】。","B");
+    }
+    /* 扣倒規則（學生棒球）：5局差10分、7局差7分提前結束；職業與國際賽正規賽照打9局 */
+    const amateur=!String(cfg.competitionKey||"").startsWith("PRO.");
+    const diff=Math.abs(M.scoreUs-M.scoreThem);
+    if(amateur&&((inn>=5&&diff>=10)||(inn>=7&&diff>=7))&&inn<cfg.innings){
+      gameLine("⚖ 依規定提前結束比賽（"+inn+"局・分差"+diff+"）。");
+      break;
     }
   }
   if(cfg.mustDecide){
@@ -3588,7 +3627,7 @@ on(1,10,3,function(){
   setLineup(["1棒 二壘 阿吉","2棒 中外野 小胖","3棒 一壘 廖大","4棒(你)","5棒 三壘 泰雅","6棒 捕手 阿海","7棒 右外野 阿明","8棒 游擊 小黑","9棒 左外野 阿樂"],"海線");
   startMatch({competitionKey:"HS.BLACK_PANTHER", editionKey:"HS.BLACK_PANTHER."+S.year,
     roundKey:"ROUND_1", matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::ROUND_1",
-    name:"黑豹旗首輪", foe:"南濱高中", foeStr:3, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"黑豹旗首輪", foe:"南濱高中", foeStr:3, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       extra("海線高中黑豹旗首勝！三年來第一場勝利");
       S.hsRecord.w++; S.fame+=5; S.scout.cpbl+=3;
@@ -3610,7 +3649,7 @@ on(1,11,1,function(){
   talk("泰雅隊長","怕什麼，球是圓的。上！");
   startMatch({competitionKey:"HS.BLACK_PANTHER", editionKey:"HS.BLACK_PANTHER."+S.year,
     roundKey:"ROUND_OF_16", matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::ROUND_OF_16",
-    name:"黑豹旗十六強", foe:"北都工商", foeStr:8, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"黑豹旗十六強", foe:"北都工商", foeStr:8, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       extra("驚天冷門！海線高中扳倒北都工商");
       S.hsRecord.w++; S.fame+=15; S.scout.cpbl+=8; S.scout.npb+=5; S.honors.push("高一黑豹旗擊敗北都");
@@ -3627,7 +3666,7 @@ on(1,11,1,function(){
       recoverArm(2,false);
       next("八強戰",()=>startMatch({competitionKey:"HS.BLACK_PANTHER",editionKey:"HS.BLACK_PANTHER."+S.year,
         roundKey:"QUARTERFINAL",matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::QUARTERFINAL",
-        name:"黑豹旗八強",foe:"穀保家商",foeStr:9,innings:6,mustDecide:true,onEnd:(w2)=>{
+        name:"黑豹旗八強",foe:"穀保家商",foeStr:9,innings:9,mustDecide:true,onEnd:(w2)=>{
           if(w2){S.hsRecord.w++;S.fame+=12;S.scout.cpbl+=6;S.scout.npb+=4;S.honors.push("高一黑豹旗四強");
             story("一年級打進全國四強——體育版用半版寫海線。四強之後的賽程由三年級學長們扛完，你的黑豹旗初年在掌聲中收官。");}
           else{S.hsRecord.l++;S.fame+=5;story("八強止步。但擊敗北都的那一夜，鎮上的人會記得很久。");}
@@ -3642,7 +3681,7 @@ on(1,1,2,function(){
   head("木棒聯賽開戰", "高中棒球聯賽・第一階段");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"STAGE_1", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::STAGE_1",
-    name:"木棒聯賽第一階段", foe:"嘉義高工", foeStr:4, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽第一階段", foe:"嘉義高工", foeStr:4, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=3; S.scout.cpbl+=2; S.flags.wood1s1=1; story("第一階段突圍！海線取得二月複賽門票。"); }
     else { S.hsRecord.l++; story("預賽出局……阿誠教練在球場邊坐了很久。"); }
     next(null, endTurn);
@@ -3653,7 +3692,7 @@ on(1,2,1,function(){
   head("木棒聯賽複賽", "高中棒球聯賽・第二階段");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"STAGE_2", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::STAGE_2",
-    name:"木棒聯賽第二階段", foe:"興大附農", foeStr:5, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽第二階段", foe:"興大附農", foeStr:5, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       S.hsRecord.w++; S.fame+=5; S.scout.cpbl+=3; S.honors.push("高一木棒聯賽複賽勝利");
       story("連過兩階段，海線的名字第一次出現在全國木棒聯賽版面。");
@@ -3696,7 +3735,7 @@ on(2,9,3,function(){
   story("靠著前一年的全國賽表現，海線收到校隊邀請。這不是單淘汰大拜拜，而是強校提早檢驗新學年陣容的舞台。");
   startMatch({competitionKey:"HS.TAOYUAN_CUP", editionKey:"HS.TAOYUAN_CUP."+S.year,
     roundKey:"INVITATIONAL_GROUP", matchKey:S.seed+"::HS.TAOYUAN_CUP::"+S.year+"::INVITATIONAL_GROUP",
-    name:"桃園盃青棒組預賽", foe:"壽山高中", foeStr:5, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"桃園盃青棒組預賽", foe:"壽山高中", foeStr:5, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       S.hsRecord.w++; S.fame+=6; S.scout.cpbl+=4; S.honors.push("高二桃園盃勝利");
       story("邀請賽擊敗傳統校隊，黑豹旗前的海線不再只是話題球隊。");
@@ -3710,7 +3749,7 @@ on(2,10,3,function(){
   head("黑豹旗（二年級）", "首輪");
   startMatch({competitionKey:"HS.BLACK_PANTHER", editionKey:"HS.BLACK_PANTHER."+S.year,
     roundKey:"ROUND_1", matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::ROUND_1",
-    name:"黑豹旗首輪", foe:"仁和高中", foeStr:4, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"黑豹旗首輪", foe:"仁和高中", foeStr:4, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=5; S.flags.kuroji2=1; sys("晉級！下一輪又是……北都工商。"); }
     else { S.hsRecord.l++; }
     next(null, endTurn);
@@ -3723,7 +3762,7 @@ on(2,11,1,function(){
   talk("何俊毅","（賽前遠遠比了個手勢）——來吧。");
   startMatch({competitionKey:"HS.BLACK_PANTHER", editionKey:"HS.BLACK_PANTHER."+S.year,
     roundKey:"ROUND_OF_16", matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::ROUND_OF_16",
-    name:"黑豹旗十六強", foe:"北都工商", foeStr:9, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"黑豹旗十六強", foe:"北都工商", foeStr:9, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       extra("海線再斬北都！全國八強");
       S.hsRecord.w++; S.fame+=20; S.scout.cpbl+=10; S.scout.npb+=8; S.scout.mlb+=5;
@@ -3738,7 +3777,7 @@ on(2,11,1,function(){
       recoverArm(2,false);
       next("八強戰",()=>startMatch({competitionKey:"HS.BLACK_PANTHER",editionKey:"HS.BLACK_PANTHER."+S.year,
         roundKey:"QUARTERFINAL",matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::QUARTERFINAL",
-        name:"黑豹旗八強",foe:"平鎮高中",foeStr:9,innings:6,mustDecide:true,onEnd:(w2)=>{
+        name:"黑豹旗八強",foe:"平鎮高中",foeStr:9,innings:9,mustDecide:true,onEnd:(w2)=>{
           if(w2){S.hsRecord.w++;S.fame+=14;S.scout.cpbl+=7;S.scout.npb+=5;S.scout.mlb+=3;S.honors.push("高二黑豹旗四強");
             story("連兩年站上全國八強之上——海線不再是黑馬，是勁旅。");}
           else{S.hsRecord.l++;S.fame+=6;S.scout.cpbl+=3;story("八強的牆很高。明年，就是最後一年了。");}
@@ -3759,7 +3798,7 @@ on(2,12,2,function(){
   story("這不是海線高中的校際戰績。你穿上縣市代表隊球衣，和來自其他學校的主力合組打線。");
   startMatch({competitionKey:"COUNTY.NEW_TAIPEI_CITY_U18",editionKey:"COUNTY.NEW_TAIPEI_CITY_U18."+S.year,
     roundKey:"INTERNATIONAL_GROUP",matchKey:S.seed+"::COUNTY.NEW_TAIPEI_CITY_U18::"+S.year+"::INTERNATIONAL_GROUP",
-    name:"國際城市U18預賽",foe:"關西地區高校選拔",foeStr:7,innings:5,statTeam:"縣市代表隊",mustDecide:true,onEnd:(win)=>{
+    name:"國際城市U18預賽",foe:"關西地區高校選拔",foeStr:7,innings:9,statTeam:"縣市代表隊",mustDecide:true,onEnd:(win)=>{
       addRepresentativeResult(win,"county");
       if(win){S.fame+=8;S.scout.cpbl+=4;S.scout.npb+=3;S.honors.push("高二國際城市U18勝利");story("你在跨校代表隊和海外對手面前站穩了舞台。");}
       else{S.fame+=3;S.scout.cpbl+=2;story("代表隊落敗，但國際對戰的情報差讓你看見另一種棒球。");}
@@ -3770,7 +3809,7 @@ on(2,1,2,function(){
   head("木棒聯賽開戰", "高中棒球聯賽・第一階段");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"STAGE_1", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::STAGE_1",
-    name:"木棒聯賽第一階段", foe:"屏東高中", foeStr:5, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽第一階段", foe:"屏東高中", foeStr:5, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=3; S.scout.cpbl+=2; S.flags.wood2s1=1; story("第一階段晉級，兩週後進入全國分組複賽。"); }
     else { S.hsRecord.l++; story("第一階段出局。木棒聯賽不會等狀態慢慢熱起來。"); }
     next(null, endTurn);
@@ -3781,7 +3820,7 @@ on(2,1,4,function(){
   head("木棒聯賽分組複賽", "高中棒球聯賽・第二階段");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"STAGE_2", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::STAGE_2",
-    name:"木棒聯賽第二階段", foe:"三民高中", foeStr:6, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽第二階段", foe:"三民高中", foeStr:6, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=5; S.scout.cpbl+=3; S.flags.wood2s2=1; story("分組複賽突圍，海線第一次闖進木棒聯賽決賽階段。"); }
     else { S.hsRecord.l++; story("分組複賽止步。連戰的投手調度與板凳深度，成了最真實的課題。"); }
     next(null, endTurn);
@@ -3792,7 +3831,7 @@ on(2,2,2,function(){
   head("木棒聯賽決賽階段", "高中棒球聯賽・八強門票戰");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"FINAL_STAGE", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::FINAL_STAGE",
-    name:"木棒聯賽決賽階段", foe:"高苑工商", foeStr:7, innings:5, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽決賽階段", foe:"高苑工商", foeStr:7, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       S.hsRecord.w++; S.fame+=9; S.scout.cpbl+=6; S.honors.push("高二木棒聯賽八強");
       story("三階段連勝，海線打進全國八強。球探開始把你視為完整賽季也能維持表現的球員。");
@@ -3808,12 +3847,12 @@ on(2,3,3,function(){
   head("東岸的春天","東岸聯盟U18棒球邀請賽・分組賽");
   story("學校憑全國賽表現獲邀東進。這次不是輸一場就回家，連戰的恢復與投手調度也是比賽的一部分。");
   startMatch({competitionKey:"HS.EAST_COAST_LEAGUE",editionKey:"HS.EAST_COAST_LEAGUE."+S.year,
-    roundKey:"GROUP_1",matchKey:S.seed+"::HS.EAST_COAST_LEAGUE::"+S.year+"::GROUP_1",name:"東岸聯盟分組賽",foe:"花蓮體中",foeStr:6,innings:5,mustDecide:true,onEnd:(win)=>{
+    roundKey:"GROUP_1",matchKey:S.seed+"::HS.EAST_COAST_LEAGUE::"+S.year+"::GROUP_1",name:"東岸聯盟分組賽",foe:"花蓮體中",foeStr:6,innings:9,mustDecide:true,onEnd:(win)=>{
       if(win){
         S.hsRecord.w++;S.fame+=5;S.scout.cpbl+=3;
         story("分組賽首勝。隔天的晉級戰立刻考驗恢復能力。");
         startMatch({competitionKey:"HS.EAST_COAST_LEAGUE",editionKey:"HS.EAST_COAST_LEAGUE."+S.year,
-          roundKey:"ADVANCEMENT",matchKey:S.seed+"::HS.EAST_COAST_LEAGUE::"+S.year+"::ADVANCEMENT",name:"東岸聯盟晉級戰",foe:"台東體中",foeStr:7,innings:5,mustDecide:true,onEnd:(w2)=>{
+          roundKey:"ADVANCEMENT",matchKey:S.seed+"::HS.EAST_COAST_LEAGUE::"+S.year+"::ADVANCEMENT",name:"東岸聯盟晉級戰",foe:"台東體中",foeStr:7,innings:9,mustDecide:true,onEnd:(w2)=>{
             if(w2){S.hsRecord.w++;S.fame+=8;S.scout.cpbl+=5;S.honors.push("高二東岸聯盟晉級");}
             else{S.hsRecord.l++;S.fame+=2;}
             next(null,endTurn);
@@ -3833,7 +3872,7 @@ on(2,4,3,function(){
   story("王貞治盃不是校隊直接報名。你先從縣內各校競爭中搶進代表隊，再與全國縣市代表爭取國際賽資格。");
   startMatch({competitionKey:"COUNTY.WANG_JEN_CHIH", editionKey:"COUNTY.WANG_JEN_CHIH."+S.year,
     roundKey:"NATIONAL_QUALIFIER", matchKey:S.seed+"::COUNTY.WANG_JEN_CHIH::"+S.year+"::NATIONAL_QUALIFIER",
-    name:"王貞治盃全國青棒錦標賽", foe:"臺中市代表隊", foeStr:7, innings:5, statTeam:"縣市代表隊", mustDecide:true, onEnd:(win)=>{
+    name:"王貞治盃全國青棒錦標賽", foe:"臺中市代表隊", foeStr:7, innings:9, statTeam:"縣市代表隊", mustDecide:true, onEnd:(win)=>{
     addRepresentativeResult(win,"county");
     if(win){
       S.fame+=10; S.scout.cpbl+=7; S.honors.push("王貞治盃縣市代表勝利");
@@ -3873,7 +3912,7 @@ on(3,10,3,function(){
   head("黑豹旗（最終年）", "首輪");
   startMatch({competitionKey:"HS.BLACK_PANTHER", editionKey:"HS.BLACK_PANTHER."+S.year,
     roundKey:"ROUND_1", matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::ROUND_1",
-    name:"黑豹旗首輪", foe:"竹南高中", foeStr:4, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"黑豹旗首輪", foe:"竹南高中", foeStr:4, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.flags.k3a=1; }
     else { S.hsRecord.l++; story("最後的黑豹旗，一輪告終……更衣室裡誰都沒說話。"); }
     next(null, endTurn);
@@ -3886,7 +3925,7 @@ on(3,11,1,function(){
   talk("何俊毅","三年了。……全力來。這是我們兩個的畢業考。");
   startMatch({competitionKey:"HS.BLACK_PANTHER", editionKey:"HS.BLACK_PANTHER."+S.year,
     roundKey:"QUARTERFINAL", matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::QUARTERFINAL",
-    name:"黑豹旗八強", foe:"北都工商", foeStr:9, innings:6, mustDecide:true, onEnd:(win)=>{
+    name:"黑豹旗八強", foe:"北都工商", foeStr:9, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       extra("海線高中挺進黑豹旗四強！");
       S.hsRecord.w++; S.fame+=25; S.scout.cpbl+=12; S.scout.npb+=10; S.scout.mlb+=8;
@@ -3905,7 +3944,7 @@ on(3,11,3,function(){
   story("十五年了。海線高中重新站上全國決賽。鎮上包了六台遊覽車北上，阿桃早點今天公休。");
   startMatch({competitionKey:"HS.BLACK_PANTHER", editionKey:"HS.BLACK_PANTHER."+S.year,
     roundKey:"FINAL", matchKey:S.seed+"::HS.BLACK_PANTHER::"+S.year+"::FINAL",
-    name:"黑豹旗冠軍戰", foe:"平鎮高中", foeStr:9, innings:6, mustDecide:true, onEnd:(win)=>{
+    name:"黑豹旗冠軍戰", foe:"平鎮高中", foeStr:9, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       extra("全國制霸！海線高中黑豹旗冠軍！！");
       grantGear("黑豹旗冠軍紀念護腕",{flat:{meet:2}});
@@ -3927,7 +3966,7 @@ on(3,12,2,function(){
   if(!finalist){sys("（臺日高中棒球對抗賽資格由本屆黑豹旗冠、亞軍取得；海線未獲參賽資格。）");actionMenu();return;}
   head("冬天的國際交流","臺日高中棒球對抗賽・黑豹旗冠亞軍獲邀");
   startMatch({competitionKey:"EXH.TAIWAN_JAPAN_HS",editionKey:"EXH.TAIWAN_JAPAN_HS."+S.year,
-    roundKey:"TAIWAN_JAPAN_1",matchKey:S.seed+"::EXH.TAIWAN_JAPAN_HS::"+S.year+"::TAIWAN_JAPAN_1",name:"臺日高中棒球對抗賽",foe:"關西高校選拔",foeStr:8,innings:6,mustDecide:true,onEnd:(win)=>{
+    roundKey:"TAIWAN_JAPAN_1",matchKey:S.seed+"::EXH.TAIWAN_JAPAN_HS::"+S.year+"::TAIWAN_JAPAN_1",name:"臺日高中棒球對抗賽",foe:"關西高校選拔",foeStr:8,innings:9,mustDecide:true,onEnd:(win)=>{
       if(win){S.hsRecord.w++;S.fame+=12;S.scout.npb+=7;S.honors.push("臺日高中對抗賽勝利");extra("海線代表台灣高校棒球拿下國際交流戰！");}
       else{S.hsRecord.l++;S.fame+=5;S.scout.npb+=3;story("交流賽的失敗沒有淘汰，卻把日職球探的筆記寫得更細。");}
       next(null,endTurn);
@@ -3938,7 +3977,7 @@ on(3,3,3,function(){
   if(!invited){sys("（最後一屆東岸聯盟U18邀請名單沒有海線。）");actionMenu();return;}
   head("東岸最後一戰","東岸聯盟U18棒球邀請賽・決賽週代表戰");
   startMatch({competitionKey:"HS.EAST_COAST_LEAGUE",editionKey:"HS.EAST_COAST_LEAGUE."+S.year,
-    roundKey:"FINAL_WEEK",matchKey:S.seed+"::HS.EAST_COAST_LEAGUE::"+S.year+"::FINAL_WEEK",name:"東岸聯盟決賽週",foe:"普門中學",foeStr:7,innings:6,mustDecide:true,onEnd:(win)=>{
+    roundKey:"FINAL_WEEK",matchKey:S.seed+"::HS.EAST_COAST_LEAGUE::"+S.year+"::FINAL_WEEK",name:"東岸聯盟決賽週",foe:"普門中學",foeStr:7,innings:9,mustDecide:true,onEnd:(win)=>{
       if(win){S.hsRecord.w++;S.fame+=9;S.scout.cpbl+=6;S.honors.push("高三東岸聯盟勝利");}
       else{S.hsRecord.l++;S.fame+=3;S.scout.cpbl+=2;}
       next(null,endTurn);
@@ -3956,7 +3995,7 @@ on(3,1,1,function(){
   head("最後的木棒聯賽", "高中棒球聯賽・第一階段");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"STAGE_1", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::STAGE_1",
-    name:"木棒聯賽第一階段", foe:"善化高中", foeStr:5, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽第一階段", foe:"善化高中", foeStr:5, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=3; S.scout.cpbl+=2; S.flags.wood3s1=1; story("首階段過關。最後一屆木棒聯賽，才剛開始。"); }
     else { S.hsRecord.l++; story("木棒聯賽第一階段出局。高中生涯的正式賽，正在一場場倒數。"); }
     next(null, endTurn);
@@ -3967,7 +4006,7 @@ on(3,1,3,function(){
   head("木棒聯賽第二階段", "分組複賽・連戰考驗");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"STAGE_2", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::STAGE_2",
-    name:"木棒聯賽第二階段", foe:"南英商工", foeStr:6, innings:4, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽第二階段", foe:"南英商工", foeStr:6, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){ S.hsRecord.w++; S.fame+=5; S.scout.cpbl+=3; S.flags.wood3s2=1; story("分組複賽晉級。二月決賽階段的對手只會更硬。"); }
     else { S.hsRecord.l++; S.fame+=2; story("止步第二階段。球探仍記下你在連戰中的表現與恢復狀況。"); }
     next(null, endTurn);
@@ -3978,7 +4017,7 @@ on(3,2,1,function(){
   head("木棒聯賽八強戰", "第三階段・傳統強權攔路");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"QUARTERFINAL", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::QUARTERFINAL",
-    name:"木棒聯賽八強戰", foe:"穀保家商", foeStr:8, innings:6, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽八強戰", foe:"穀保家商", foeStr:8, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       S.hsRecord.w++; S.fame+=10; S.scout.cpbl+=6; S.flags.wood3s3=1; S.honors.push("高三木棒聯賽四強");
       story("扳倒傳統強權，海線取得最終決賽門票。");
@@ -3993,7 +4032,7 @@ on(3,2,3,function(){
   head("木棒聯賽冠軍戰", "第四階段・完整賽季的終點");
   startMatch({competitionKey:"HS.WOOD_BAT_LEAGUE", editionKey:"HS.WOOD_BAT_LEAGUE."+S.year,
     roundKey:"FINAL", matchKey:S.seed+"::HS.WOOD_BAT_LEAGUE::"+S.year+"::FINAL",
-    name:"木棒聯賽冠軍戰", foe:"平鎮高中", foeStr:9, innings:7, mustDecide:true, onEnd:(win)=>{
+    name:"木棒聯賽冠軍戰", foe:"平鎮高中", foeStr:9, innings:9, mustDecide:true, onEnd:(win)=>{
     if(win){
       S.hsRecord.w++; S.fame+=25; S.scout.cpbl+=12; S.scout.npb+=7; S.honors.push("木棒聯賽冠軍");
       grantGear("木棒聯賽冠軍紀念木棒",{flat:{power:2}});
@@ -4017,7 +4056,7 @@ on(3,4,3,function(){
   story("玉山盃以縣市為單位組隊，也是U18培訓隊的重要選才舞台。你從縣內各校選拔中脫穎而出，穿上縣市代表隊球衣。");
   startMatch({competitionKey:"COUNTY.YUSHAN", editionKey:"COUNTY.YUSHAN."+S.year,
     roundKey:"NATIONAL_PRELIMINARY", matchKey:S.seed+"::COUNTY.YUSHAN::"+S.year+"::NATIONAL_PRELIMINARY",
-    name:"玉山盃全國青棒錦標賽預賽", foe:"新北市代表隊", foeStr:8, innings:5, statTeam:"縣市代表隊", mustDecide:true, onEnd:(win)=>{
+    name:"玉山盃全國青棒錦標賽預賽", foe:"新北市代表隊", foeStr:8, innings:9, statTeam:"縣市代表隊", mustDecide:true, onEnd:(win)=>{
     S.flags.yushanPlayed=1;
     addRepresentativeResult(win,"county");
     if(win){
@@ -4035,7 +4074,7 @@ on(3,5,1,function(){
   story("看台最上層坐著U18選訓委員。縣市代表賽進入後段，面對的已是全國最完整的青棒陣容。");
   startMatch({competitionKey:"COUNTY.YUSHAN", editionKey:"COUNTY.YUSHAN."+S.year,
     roundKey:"QUARTERFINAL", matchKey:S.seed+"::COUNTY.YUSHAN::"+S.year+"::QUARTERFINAL",
-    name:"玉山盃全國八強", foe:"桃園市代表隊", foeStr:9, innings:6, statTeam:"縣市代表隊", mustDecide:true, onEnd:(win)=>{
+    name:"玉山盃全國八強", foe:"桃園市代表隊", foeStr:9, innings:9, statTeam:"縣市代表隊", mustDecide:true, onEnd:(win)=>{
     S.flags.yushanDeep=win?1:0;
     addRepresentativeResult(win,"county");
     if(win){
@@ -4057,7 +4096,7 @@ on(3,5,2,function(){
     story("選訓不是只看一場勝敗：玉山盃個人成績、位置需求、體能與集訓紅白戰都會納入。看台上的各國球探也架起雷達槍。");
     startMatch({competitionKey:"EXH.U18_CAMP", editionKey:"EXH.U18_CAMP."+S.year,
       roundKey:"INTRASQUAD", matchKey:S.seed+"::EXH.U18_CAMP::"+S.year+"::INTRASQUAD",
-      name:"U18培訓隊紅白戰", foe:"培訓白隊", foeStr:8, innings:4, mustDecide:true, onEnd:(win)=>{
+      name:"U18培訓隊紅白戰", foe:"培訓白隊", foeStr:8, innings:9, mustDecide:true, onEnd:(win)=>{
       if(win){
         S.flags.u18CampWin=1; S.honors.push("U18培訓隊"); S.fame+=9;
         S.scout.npb+=6; S.scout.mlb+=7; S.scout.cpbl+=5;
@@ -4092,7 +4131,7 @@ on(3,6,1,function(){
   story("六月進行的是最終集訓與資格賽前哨，不是把九月的U18世界盃提前打完。你與何俊毅第一次穿上同一件中華隊球衣。");
   startMatch({competitionKey:"INTL.U18_QUALIFIER", editionKey:"INTL.U18_QUALIFIER."+S.year,
     roundKey:"ASIA_QUALIFIER_1", matchKey:S.seed+"::INTL.U18_QUALIFIER::"+S.year+"::ASIA_QUALIFIER_1",
-    name:"U18資格賽前哨・對韓國", foe:"韓國U18", foeStr:8, innings:5, mustDecide:true, onEnd:(win1)=>{
+    name:"U18資格賽前哨・對韓國", foe:"韓國U18", foeStr:8, innings:9, mustDecide:true, onEnd:(win1)=>{
     addRepresentativeResult(win1,"national");
     if(win1){ S.fame+=10; S.scout.cpbl+=5; S.scout.npb+=5; S.scout.mlb+=5; gain("擊敗韓國U18！三路球探註記+5"); const m=spGain(6,6,6); gain("國際集訓洗禮："+m); }
     else { S.fame+=4; const m=spGain(4,4,4); gain("國際集訓經驗："+m); }
@@ -4100,7 +4139,7 @@ on(3,6,1,function(){
     next("對日本U18", ()=>{
       startMatch({competitionKey:"INTL.U18_QUALIFIER", editionKey:"INTL.U18_QUALIFIER."+S.year,
         roundKey:"ASIA_QUALIFIER_2", matchKey:S.seed+"::INTL.U18_QUALIFIER::"+S.year+"::ASIA_QUALIFIER_2",
-        name:"U18資格賽前哨・對日本", foe:"日本U18", foeStr:9, innings:6, mustDecide:true, onEnd:(win2)=>{
+        name:"U18資格賽前哨・對日本", foe:"日本U18", foeStr:9, innings:9, mustDecide:true, onEnd:(win2)=>{
         addRepresentativeResult(win2,"national");
         if(win2){
           extra("U18資格賽前哨擊敗日本！中華隊帶著信心進入後續集訓");
@@ -4166,14 +4205,14 @@ function u18WorldCup(done){
   let wins=0;
   startMatch({competitionKey:"INTL.U18_WORLD_CUP",editionKey:"INTL.U18_WORLD_CUP."+S.year,
     roundKey:"OPENING_ROUND",matchKey:S.seed+"::INTL.U18_WORLD_CUP::"+S.year+"::OPENING_ROUND",
-    name:"U18世界盃・預賽",foe:"巴拿馬U18",foeStr:7,innings:5,statTeam:"中華U18代表隊",mustDecide:true,onEnd:(win)=>{
+    name:"U18世界盃・預賽",foe:"巴拿馬U18",foeStr:7,innings:9,statTeam:"中華U18代表隊",mustDecide:true,onEnd:(win)=>{
       addRepresentativeResult(win,"national");
       if(win){wins++;S.fame+=8;S.scout.mlb+=5;}else S.fame+=3;
       recoverArm(2,false);
       next("進入超級循環賽",()=>{
         startMatch({competitionKey:"INTL.U18_WORLD_CUP",editionKey:"INTL.U18_WORLD_CUP."+S.year,
           roundKey:"SUPER_ROUND",matchKey:S.seed+"::INTL.U18_WORLD_CUP::"+S.year+"::SUPER_ROUND",
-          name:"U18世界盃・超級循環賽",foe:"日本U18",foeStr:9,innings:6,statTeam:"中華U18代表隊",mustDecide:true,onEnd:(win2)=>{
+          name:"U18世界盃・超級循環賽",foe:"日本U18",foeStr:9,innings:9,statTeam:"中華U18代表隊",mustDecide:true,onEnd:(win2)=>{
             addRepresentativeResult(win2,"national");
             if(win2){wins++;S.fame+=12;S.scout.npb+=8;}else S.fame+=4;
             recoverArm(2,false);
@@ -4185,7 +4224,7 @@ function u18WorldCup(done){
             next(gold?"世界冠軍戰":"銅牌戰",()=>{
               startMatch({competitionKey:"INTL.U18_WORLD_CUP",editionKey:"INTL.U18_WORLD_CUP."+S.year,
                 roundKey:gold?"FINAL":"BRONZE_MEDAL",matchKey:S.seed+"::INTL.U18_WORLD_CUP::"+S.year+"::"+(gold?"FINAL":"BRONZE_MEDAL"),
-                name:"U18世界盃・"+(gold?"冠軍戰":"銅牌戰"),foe:medalFoe,foeStr:9,innings:7,statTeam:"中華U18代表隊",mustDecide:true,onEnd:(medalWin)=>{
+                name:"U18世界盃・"+(gold?"冠軍戰":"銅牌戰"),foe:medalFoe,foeStr:9,innings:9,statTeam:"中華U18代表隊",mustDecide:true,onEnd:(medalWin)=>{
                   addRepresentativeResult(medalWin,"national");
                   if(medalWin){
                     const medal=gold?"金牌":"銅牌";extra("中華U18奪下世界盃"+medal+"！");
@@ -4517,7 +4556,7 @@ function uniYear(){
       {label:"文武兼修｜訓練×1.0・學業+8", fn:()=>uniTrain(1.0,8)},
       {label:"以學業為重｜訓練×0.7・學業+16", fn:()=>uniTrain(0.7,16)},
     ];
-    if(S.flags.cardsLeftUni>0)ul.push({label:"🎴 抽事件卡（剩"+S.flags.cardsLeftUni+"張）｜大學生活突發・不耗年度",small:true,fn:()=>{S.flags.cardsLeftUni--;hsEventCard(uniMenu);}});
+    if(S.flags.cardsLeftUni>0)setCardDraw("抽事件卡（剩"+S.flags.cardsLeftUni+"張）",()=>{S.flags.cardsLeftUni--;hsEventCard(uniMenu);});
     ul.push({label:"能力強化（不耗年度）",small:true,fn:()=>allocMenu(uniMenu)});
     choices(ul,"這一年的重心？");
   };
@@ -4535,7 +4574,7 @@ function uniYear(){
     const key = (S.uniYear===2||S.uniYear===4);
     if(key){
       head("大專聯賽關鍵戰", "公開一級・對台體大");
-      startMatch({name:"大專聯賽", foe:"國立臺灣體大", foeStr:6+S.uniYear, innings:4,
+      startMatch({name:"大專聯賽", foe:"國立臺灣體大", foeStr:6+S.uniYear, innings:9,
         competitionKey:"UNI.UBL",editionKey:"UNI.UBL."+S.year,roundKey:"uni"+S.uniYear+".key",
         matchKey:S.seed+"::UNI.UBL::"+S.year+"::uni"+S.uniYear+".key",onEnd:(win)=>{
         if(win){ S.fame+=8; S.scout.cpbl+=6; S.scout.npb+=3; S.scout.mlb+=3; S.honors.push("大專聯賽勝利(大"+S.uniYear+")"); if(S.uniYear===4)unlockTrait("academy","大四率隊贏下大專聯賽關鍵戰"); }
@@ -4553,7 +4592,7 @@ function uniYear(){
     if(S.uniYear===3 && S.fame>=30 && overall()>=50 && !S.flags.uniIntl){
       S.flags.uniIntl=1;
       ev("入選大學國家隊（世大運）！");
-      startMatch({name:"世大運", foe:"日本大學代表", foeStr:8, innings:4,
+      startMatch({name:"世大運", foe:"日本大學代表", foeStr:8, innings:9,
         competitionKey:"INTL.UNIVERSIADE",editionKey:"INTL.UNIVERSIADE."+S.year,roundKey:"key",
         matchKey:S.seed+"::INTL.UNIVERSIADE::"+S.year+"::key",onEnd:(win)=>{
         if(win){ S.honors.push("世大運擊敗日本"); S.fame+=14; S.scout.npb+=8; S.scout.mlb+=8; gain("國際賽立功！日美球探大加"); const m=spGain(8,8,8); gain("國際賽洗禮："+m); }
@@ -4839,7 +4878,7 @@ function proMonthAction(mLabel, monthGames){
   list.push({label:"徹底保養", fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); if(S.pos==="P"){recoverArm(7,true);S.traitCounters.careActions++;} practiceMilestoneTick("str"); gain("疲勞-22、體力+20"+(S.pos==="P"?"、手臂回復":"")); })});
   (()=>{ const mk=S.year*100+(S.sea?S.sea.mi:0);
     if(S.flags.cardMonth!==mk){S.flags.cardMonth=mk;S.flags.cardsLeftPro=2;}
-    if(S.flags.cardsLeftPro>0)list.push({label:"🎴 抽事件卡（剩"+S.flags.cardsLeftPro+"張）｜場外突發三檔應對・不耗行動",fn:()=>{S.flags.cardsLeftPro--;proEventCard(()=>proMonthAction(mLabel,monthGames));}});
+    if(S.flags.cardsLeftPro>0)setCardDraw("抽事件卡（剩"+S.flags.cardsLeftPro+"張）",()=>{S.flags.cardsLeftPro--;proEventCard(()=>proMonthAction(mLabel,monthGames));});
   })();
   if(S.gf||S.married){
     list.push({label:S.married?"陪伴家人":"與"+GF[S.gf].name+"約會", fn:()=>act(()=>{ yarukiUp(2); S.fatigue=Math.max(0,S.fatigue-12); gain("狀態+2、疲勞-12（心的充電）"); })});
@@ -5785,7 +5824,7 @@ function playCompressedPostseasonRound(route,index,goodSeason,rating,seasonLevel
     const line=recordQuickEvent({id:S.seed+"::"+rule.key+"::"+S.year+"::"+rule.roundKey,
       competitionKey:rule.key,editionKey:rule.key+"."+S.year,roundKey:rule.roundKey,
       league:S.league,level:seasonLevel,opponent:foe,result:win?"W":"L",choice:choice,difficulty:rule.difficulty,
-      innings:effectivePitchRole()==="SP"?6:2});
+      innings:effectivePitchRole()==="SP"?9:2});
     const result={key:rule.key,editionKey:rule.key+"."+S.year,roundKey:rule.roundKey,title:rule.title,
       opponent:foe,result:win?"W":"L",winProbability:Number(p.toFixed(4)),seedRoll:Number(roll.toFixed(6))};
     S.flags.lastPostseasonPath.rounds.push(result);
@@ -6443,7 +6482,7 @@ function intlTournamentBody(evt, done){
         id:S.seed+"::"+evt.key+"::"+S.year+"::prelim"+g,
         competitionKey:evt.key,editionKey:evt.key+"."+S.year,roundKey:"prelim"+g,
         team:"中華隊",opponent:foe+"代表",result:win?"W":"L",choice:c,
-        difficulty:6+evt.tier,innings:3
+        difficulty:6+evt.tier,innings:9
       });
       if(win){w++; gameLine("　勝！全台轉播收視飆高。"+(statLine?"　你："+statLine:"")); S.fame+=2+evt.tier;}
       else gameLine("　惜敗……"+(statLine?"　你："+statLine:""));
@@ -6466,7 +6505,7 @@ function intlTournamentBody(evt, done){
     head("關鍵一戰", medalGame+"・對"+finalFoe+"──"+(evt.tier===3&&S.flags.rivalNPB?"何俊毅先發，你壓陣":"整個台灣都在看"));
     sys("中華隊戰力"+teamPow+"＋你的貢獻+"+playerBoost+" → 晉級"+medalGame+"。");
     if(evt.tier===3&&S.flags.rivalNPB) story("何俊毅先發六局好投退場，走下投手丘時朝你點了點頭——接下來，看你的了。");
-    startMatch({name:evt.name+"・關鍵戰", foe:finalFoe+"代表", foeStr:6+evt.tier, innings:3,mustDecide:true,
+    startMatch({name:evt.name+"・關鍵戰", foe:finalFoe+"代表", foeStr:6+evt.tier, innings:9,mustDecide:true,
       competitionKey:evt.key,editionKey:evt.key+"."+S.year,roundKey:"key",
       matchKey:S.seed+"::"+evt.key+"::"+S.year+"::key",onEnd:(win)=>{
       const medalGame=S.flags["intlMedalGame"+S.year]||"銅牌戰";
