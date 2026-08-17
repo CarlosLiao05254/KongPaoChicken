@@ -629,7 +629,8 @@ function ensurePotentialCaps(state){
   state.potential=(state.potential&&typeof state.potential==="object")?state.potential:{};
   POTENTIAL_KEYS.forEach(key=>{
     const old=Number(state.potential[key]),floor=currentPotentialFloor(state,key),fresh=generated[key];
-    state.potential[key]=Math.max(floor,Number.isFinite(old)?Math.round(old):fresh);
+    /* 注意：old 不可四捨五入——小數化能力（+1評級步長）下，round 會讓軟頂每次重算悄悄上浮，超潛力價格永遠不觸發 */
+    state.potential[key]=Math.max(floor,Number.isFinite(old)?old:fresh);
   });
   /* 變化球個人潛力帽取消：上限＝18＋天才2＋天生怪物1（物理極限21，含舊檔自動遷移） */
   state.potential.breakTotal=breakHardCap(state);
@@ -2201,8 +2202,6 @@ function actionMenu(){
   list.push({label:pLabel("伸展保養","str")+"・體力+", fn:()=>practice("str")});
   list.push({label:"讀書｜學業+（可選強度）", fn:studyMenu});
   list.push({label:"休息｜體力+32~48", fn:doRest});
-  if(S.flags.cardWeek!==S.turn){S.flags.cardWeek=S.turn;S.flags.cardsLeft=1;}
-  if(S.flags.cardsLeft>0)setCardDraw("抽事件卡（剩"+S.flags.cardsLeft+"張）",()=>{S.flags.cardsLeft--;hsEventCard(actionMenu);});
   list.push({label:"出去晃晃", fn:urotsukiMenu});
   list.push({label:"聯絡・約會", fn:phoneMenu});
   list.push({label:"能力強化（不耗回合）", fn:()=>allocMenu(actionMenu)});
@@ -2424,15 +2423,16 @@ function allocMenu(back){
   const sName = S.twoWay?"變化／敏捷（共用）":S.pos==="P"?"變化":"敏捷";
   sys("持有點數　筋力"+S.expK+"　技術"+S.expG+"　"+sName+S.expS);
   const sense = S.abil.includes("センス○")?0.87 : 1;
-  const COST_DIFF=S.phase==="hs"?1.35:1.15; // 難度旋鈕：高中期成本更貴（避免畢業就完全體），職業回到標準
+  const COST_DIFF=S.phase==="hs"?1.8:1.5; // 難度旋鈕：高中期最貴，職業仍偏緊（點數經濟 v2）
   const c=(n)=>Math.ceil(n*sense*COST_DIFF);
   const cap=(key,hard)=>trainingPotentialCap(key,hard,S);
   const potentialCapDisplay=(key)=>{const pp=potentialCap(key,S);return (key==="traj"?pp:ratingOf(key,pp))+(currentPotentialFloor(S,key)>=pp?"（已超越）":"");};
   const R=(key,v)=>ratingOf(key,v); /* 內部值→1-140 評級顯示 */
   const tierMult=abilityCostMultiplier;
-  const overMult=(key,current)=>current>=potentialCap(key,S)?4:1; // 軟帽：超越個人潛力後成本×4
-  const steppedCost=(base,key,current,actualStep,normalStep)=>c(base*tierMult(key,current)*overMult(key,current)*Math.max(0.25,actualStep/(normalStep||1)));
-  const tierNote=(key,v)=>{const m=tierMult(key,v),o=overMult(key,v);return (m>1?("・高階×"+m.toFixed(2)):"")+(o>1?"・超潛力×4":"");};
+  const ST15=15/140, ST255=255/140; /* 內部步長＝畫面上的 +1 評級（一點一點加） */
+  const overMult=(key,current)=>current>=potentialCap(key,S)?6:1; // 軟帽：超越個人潛力後成本×6
+  const steppedCost=(base,key,current,actualStep,normalStep)=>c(base*tierMult(key,current)*overMult(key,current)*Math.max(0.05,actualStep/(normalStep||1)));
+  const tierNote=(key,v)=>{const m=tierMult(key,v),o=overMult(key,v);return (m>1?("・高階×"+m.toFixed(2)):"")+(o>1?"・超潛力×6":"");};
   const raise=(key,amount)=>{
     if(typeof gainCappedAbility==="function")return gainCappedAbility(key,amount,S);
     const before=Number(S[key])||0,hard=(typeof ABILITY_HARD_CAP!=="undefined"&&ABILITY_HARD_CAP[key])||Infinity;
@@ -2454,27 +2454,27 @@ function allocMenu(back){
     (()=>{const pc=cap("traj",4),gc=steppedCost(24,"traj",S.traj,1,1),kc=steppedCost(8,"traj",S.traj,1,1);
       buy(batN("彈道拉高（打擊型態 Lv"+S.traj+"→Lv"+Math.min(pc,S.traj+1)+"：長打↑接觸↓）"),"技"+gc+" 筋"+kc+tierNote("traj",S.traj),()=>S.traj<pc&&S.expG>=gc&&S.expK>=kc,()=>{raise("traj",1);S.expG-=gc;S.expK-=kc;},S.traj>=pc);})();
     if(S.traj>1)(()=>{buy(batN("彈道壓低（Lv"+S.traj+"→Lv"+(S.traj-1)+"：接觸↑長打↓)"),"技5",()=>S.expG>=Math.ceil(5*sense),()=>{S.traj-=1;S.expG-=Math.ceil(5*sense);},false);})();
-    (()=>{ const pc=cap("meet",15),sw=(S.hand==="S")?1.15:1; const gc=Math.ceil(steppedCost(24,"meet",S.meet,1,1)*sw),kc=Math.ceil(steppedCost(6,"meet",S.meet,1,1)*sw);
-      buy(batN("接觸強化（"+R("meet",S.meet)+"→"+R("meet",Math.min(pc,S.meet+1))+" / 軟頂"+potentialCapDisplay("meet")+"）"+(sw>1?"(開弓+15%)":"")),"技"+gc+" 筋"+kc+tierNote("meet",S.meet),()=>S.meet<pc&&S.expG>=gc&&S.expK>=kc,()=>{raise("meet",1);S.expG-=gc;S.expK-=kc;},S.meet>=pc); })();
-    (()=>{const pc=cap("power",255),step=trainingStepToCap("power",S.power,8,255,S),kc=steppedCost(16,"power",S.power,step,8);
+    (()=>{ const pc=cap("meet",15),sw=(S.hand==="S")?1.15:1; const gc=Math.ceil(steppedCost(24,"meet",S.meet,ST15,1)*sw),kc=Math.ceil(steppedCost(6,"meet",S.meet,ST15,1)*sw);
+      buy(batN("接觸強化（"+R("meet",S.meet)+"→"+R("meet",Math.min(pc,S.meet+ST15))+" / 軟頂"+potentialCapDisplay("meet")+"）"+(sw>1?"(開弓+15%)":"")),"技"+gc+" 筋"+kc+tierNote("meet",S.meet),()=>S.meet<pc-1e-9&&S.expG>=gc&&S.expK>=kc,()=>{raise("meet",ST15);S.expG-=gc;S.expK-=kc;},S.meet>=pc-1e-9); })();
+    (()=>{const pc=cap("power",255),step=trainingStepToCap("power",S.power,ST255,255,S),kc=steppedCost(16,"power",S.power,step,8);
       buy(batN("力量強化（"+R("power",S.power)+"→"+R("power",Math.min(pc,S.power+step))+" / 軟頂"+potentialCapDisplay("power")+"）"),"筋"+kc+tierNote("power",S.power),()=>step>0&&S.expK>=kc,()=>{raise("power",step);S.expK-=kc;},step<=0);})();
-    (()=>{const pc=cap("run",15),sc=steppedCost(24,"run",S.run,1,1);buy(batN("跑力強化（"+R("run",S.run)+"→"+R("run",Math.min(pc,S.run+1))+" / 軟頂"+potentialCapDisplay("run")+"）"),"敏"+sc+tierNote("run",S.run),()=>S.run<pc&&S.expS>=sc,()=>{raise("run",1);S.expS-=sc;},S.run>=pc);})();
-    (()=>{const pc=cap("eye",15),gc=steppedCost(14,"eye",S.eye,1,1),sc=steppedCost(6,"eye",S.eye,1,1);buy(batN("選球強化（"+R("eye",S.eye)+"→"+R("eye",Math.min(pc,S.eye+1))+" / 軟頂"+potentialCapDisplay("eye")+"）"),"技"+gc+" 敏"+sc+tierNote("eye",S.eye),()=>S.eye<pc&&S.expG>=gc&&S.expS>=sc,()=>{raise("eye",1);S.expG-=gc;S.expS-=sc;},S.eye>=pc);})();
-    (()=>{const pc=cap("clutch",15),gc=steppedCost(12,"clutch",S.clutch,1,1),kc=steppedCost(8,"clutch",S.clutch,1,1);buy(batN("膽識鍛鍊（"+R("clutch",S.clutch)+"→"+R("clutch",Math.min(pc,S.clutch+1))+" / 軟頂"+potentialCapDisplay("clutch")+"）關鍵戰表現也會累積"),"技"+gc+" 筋"+kc+tierNote("clutch",S.clutch),()=>S.clutch<pc&&S.expG>=gc&&S.expK>=kc,()=>{raise("clutch",1);S.expG-=gc;S.expK-=kc;},S.clutch>=pc);})();
-    if(!S.twoWay)(()=>{const pc=cap("stam",255),step=trainingStepToCap("stam",S.stam,6,255,S),kc=steppedCost(12,"stam",S.stam,step,6);buy(batN("體力強化（"+R("stam",S.stam)+"→"+R("stam",Math.min(pc,S.stam+step))+" / 軟頂"+potentialCapDisplay("stam")+"）耐久與出賽量"),"筋"+kc+tierNote("stam",S.stam),()=>step>0&&S.expK>=kc,()=>{raise("stam",step);S.expK-=kc;},step<=0);})();
-    (()=>{const pc=cap("fld",15),gc=steppedCost(16,"fld",S.fld,1,1),sc=steppedCost(10,"fld",S.fld,1,1);buy(batN("守備強化（"+R("fld",S.fld)+"→"+R("fld",Math.min(pc,S.fld+1))+" / 軟頂"+potentialCapDisplay("fld")+"）"),"技"+gc+" 敏"+sc+tierNote("fld",S.fld),()=>S.fld<pc&&S.expG>=gc&&S.expS>=sc,()=>{raise("fld",1);S.expG-=gc;S.expS-=sc;},S.fld>=pc);})();
+    (()=>{const pc=cap("run",15),sc=steppedCost(24,"run",S.run,ST15,1);buy(batN("跑力強化（"+R("run",S.run)+"→"+R("run",Math.min(pc,S.run+ST15))+" / 軟頂"+potentialCapDisplay("run")+"）"),"敏"+sc+tierNote("run",S.run),()=>S.run<pc-1e-9&&S.expS>=sc,()=>{raise("run",ST15);S.expS-=sc;},S.run>=pc-1e-9);})();
+    (()=>{const pc=cap("eye",15),gc=steppedCost(14,"eye",S.eye,ST15,1),sc=steppedCost(6,"eye",S.eye,ST15,1);buy(batN("選球強化（"+R("eye",S.eye)+"→"+R("eye",Math.min(pc,S.eye+ST15))+" / 軟頂"+potentialCapDisplay("eye")+"）"),"技"+gc+" 敏"+sc+tierNote("eye",S.eye),()=>S.eye<pc-1e-9&&S.expG>=gc&&S.expS>=sc,()=>{raise("eye",ST15);S.expG-=gc;S.expS-=sc;},S.eye>=pc-1e-9);})();
+    (()=>{const pc=cap("clutch",15),gc=steppedCost(12,"clutch",S.clutch,ST15,1),kc=steppedCost(8,"clutch",S.clutch,ST15,1);buy(batN("膽識鍛鍊（"+R("clutch",S.clutch)+"→"+R("clutch",Math.min(pc,S.clutch+ST15))+" / 軟頂"+potentialCapDisplay("clutch")+"）關鍵戰表現也會累積"),"技"+gc+" 筋"+kc+tierNote("clutch",S.clutch),()=>S.clutch<pc-1e-9&&S.expG>=gc&&S.expK>=kc,()=>{raise("clutch",ST15);S.expG-=gc;S.expK-=kc;},S.clutch>=pc-1e-9);})();
+    if(!S.twoWay)(()=>{const pc=cap("stam",255),step=trainingStepToCap("stam",S.stam,ST255,255,S),kc=steppedCost(12,"stam",S.stam,step,6);buy(batN("體力強化（"+R("stam",S.stam)+"→"+R("stam",Math.min(pc,S.stam+step))+" / 軟頂"+potentialCapDisplay("stam")+"）耐久與出賽量"),"筋"+kc+tierNote("stam",S.stam),()=>step>0&&S.expK>=kc,()=>{raise("stam",step);S.expK-=kc;},step<=0);})();
+    (()=>{const pc=cap("fld",15),gc=steppedCost(16,"fld",S.fld,ST15,1),sc=steppedCost(10,"fld",S.fld,ST15,1);buy(batN("守備強化（"+R("fld",S.fld)+"→"+R("fld",Math.min(pc,S.fld+ST15))+" / 軟頂"+potentialCapDisplay("fld")+"）"),"技"+gc+" 敏"+sc+tierNote("fld",S.fld),()=>S.fld<pc-1e-9&&S.expG>=gc&&S.expS>=sc,()=>{raise("fld",ST15);S.expG-=gc;S.expS-=sc;},S.fld>=pc-1e-9);})();
   }
   if(S.pos==="P"){
     (()=>{const pc=cap("velo",168),kc=steppedCost(12,"velo",S.velo,1,1),gc=steppedCost(6,"velo",S.velo,1,1);buy(pitN("球速強化（"+R("velo",S.velo)+"→"+R("velo",Math.min(pc,S.velo+1))+"・"+S.velo+"→"+Math.min(pc,S.velo+1)+"km / 軟頂"+potentialCapDisplay("velo")+"）"),"筋"+kc+" 技"+gc+tierNote("velo",S.velo),()=>S.velo<pc&&S.expK>=kc&&S.expG>=gc,()=>{raise("velo",1);S.expK-=kc;S.expG-=gc;},S.velo>=pc);})();
-    (()=>{const pc=cap("ctrl",255),step=trainingStepToCap("ctrl",S.ctrl,6,255,S),gc=steppedCost(16,"ctrl",S.ctrl,step,6);buy(pitN("控球強化（"+R("ctrl",S.ctrl)+"→"+R("ctrl",Math.min(pc,S.ctrl+step))+" / 軟頂"+potentialCapDisplay("ctrl")+"）"),"技"+gc+tierNote("ctrl",S.ctrl),()=>step>0&&S.expG>=gc,()=>{raise("ctrl",step);S.expG-=gc;},step<=0);})();
-    if(!S.twoWay)(()=>{const pc=cap("clutch",15),gc=steppedCost(12,"clutch",S.clutch,1,1),kc=steppedCost(8,"clutch",S.clutch,1,1);buy(pitN("膽識鍛鍊（"+R("clutch",S.clutch)+"→"+R("clutch",Math.min(pc,S.clutch+1))+" / 軟頂"+potentialCapDisplay("clutch")+"）關鍵戰表現也會累積"),"技"+gc+" 筋"+kc+tierNote("clutch",S.clutch),()=>S.clutch<pc&&S.expG>=gc&&S.expK>=kc,()=>{raise("clutch",1);S.expG-=gc;S.expK-=kc;},S.clutch>=pc);})();
-    (()=>{const pc=cap("stam",255),step=trainingStepToCap("stam",S.stam,6,255,S),kc=steppedCost(14,"stam",S.stam,step,6);buy(pitN("耐力強化（"+R("stam",S.stam)+"→"+R("stam",Math.min(pc,S.stam+step))+" / 軟頂"+potentialCapDisplay("stam")+"）"),"筋"+kc+tierNote("stam",S.stam),()=>step>0&&S.expK>=kc,()=>{raise("stam",step);S.expK-=kc;},step<=0);})();
+    (()=>{const pc=cap("ctrl",255),step=trainingStepToCap("ctrl",S.ctrl,ST255,255,S),gc=steppedCost(16,"ctrl",S.ctrl,step,6);buy(pitN("控球強化（"+R("ctrl",S.ctrl)+"→"+R("ctrl",Math.min(pc,S.ctrl+step))+" / 軟頂"+potentialCapDisplay("ctrl")+"）"),"技"+gc+tierNote("ctrl",S.ctrl),()=>step>0&&S.expG>=gc,()=>{raise("ctrl",step);S.expG-=gc;},step<=0);})();
+    if(!S.twoWay)(()=>{const pc=cap("clutch",15),gc=steppedCost(12,"clutch",S.clutch,ST15,1),kc=steppedCost(8,"clutch",S.clutch,ST15,1);buy(pitN("膽識鍛鍊（"+R("clutch",S.clutch)+"→"+R("clutch",Math.min(pc,S.clutch+ST15))+" / 軟頂"+potentialCapDisplay("clutch")+"）關鍵戰表現也會累積"),"技"+gc+" 筋"+kc+tierNote("clutch",S.clutch),()=>S.clutch<pc-1e-9&&S.expG>=gc&&S.expK>=kc,()=>{raise("clutch",ST15);S.expG-=gc;S.expK-=kc;},S.clutch>=pc-1e-9);})();
+    (()=>{const pc=cap("stam",255),step=trainingStepToCap("stam",S.stam,ST255,255,S),kc=steppedCost(14,"stam",S.stam,step,6);buy(pitN("耐力強化（"+R("stam",S.stam)+"→"+R("stam",Math.min(pc,S.stam+step))+" / 軟頂"+potentialCapDisplay("stam")+"）"),"筋"+kc+tierNote("stam",S.stam),()=>step>0&&S.expK>=kc,()=>{raise("stam",step);S.expK-=kc;},step<=0);})();
     const breakCap=cap("breakTotal",breakHardCap(S)),breakTotal=currentBreakTotal(S);
     const learnedBreaks=pitchNames(S);
     /* 單一「變化球」數值：點數只進總量，格數自動平均進修到配備球種 */
     (()=>{
       const capped=breakTotal>=breakCap||!learnedBreaks.length;
-      const bkCost=c(14+Math.round(breakTotal*1.9)*(overPotential("breakTotal",S)?4:1));
+      const bkCost=c(14+Math.round(breakTotal*1.9)*(overPotential("breakTotal",S)?6:1));
       buy(pitN("變化球強化（"+R("breakTotal",breakTotal)+"→"+R("breakTotal",Math.min(breakCap,breakTotal+1))+" / 軟頂"+R("breakTotal",breakCap)+"）"),
         "變"+bkCost,()=>!capped&&S.expS>=bkCost,()=>{raiseBreakOne(S);normalizeBreakSpread(S);S.expS-=bkCost;},capped);
     })();
@@ -2495,7 +2495,7 @@ function allocMenu(back){
   }});
   list.push({label:"確認 ▸", fn:()=>{ window.__allocSnap=null; back(); }, primary:true, noEcho:true});
   const abilHint=S.abil.length?("特殊能力："+S.abil.join("、")):"";
-  choices(list, "評級 1-140：C100=中職級、B110=日職級、A120=美職級、S130=歷史級。軟帽制：個人潛力內正常價，超越後成本×4；全域硬帽140（道具／稱號加成可推到150）。"
+  choices(list, "評級 1-140，每次強化 +1 評級（一點一點加）。錨點：C100=中職一軍平均、B110=日職平均、A120=美職平均、S130=歷史級。軟帽制：個人潛力內正常價，超越後成本×6；全域硬帽140（道具／稱號可推到150）。"
     +(S.twoWay?"　投打升級共用同一批點數，強化一面就會犧牲另一面的成長。":"")
     +(S.twoWay&&abilHint?"　｜":"")+abilHint||null);
   /* choices() 是全域舊 UI；封頂項在這裡補上原生 disabled，避免誤觸後留下 log。 */
@@ -4622,23 +4622,31 @@ function uniYear(){
   hr(); head("大學第"+S.uniYear+"年", S.uniName+"・大專棒球聯賽");
   rollSeasonDice("大學第"+S.uniYear+"年運勢擲骰");
   const uniMenu=()=>{
-    if(S.flags.cardUniYear!==S.uniYear){S.flags.cardUniYear=S.uniYear;S.flags.cardsLeftUni=3;}
     const ul=[
       {label:"棒球漬け（特訓為主）｜訓練×1.3", fn:()=>uniTrain(1.3,0)},
       {label:"文武兼修｜訓練×1.0・學業+8", fn:()=>uniTrain(1.0,8)},
       {label:"以學業為重｜訓練×0.7・學業+16", fn:()=>uniTrain(0.7,16)},
     ];
-    if(S.flags.cardsLeftUni>0)setCardDraw("抽事件卡（剩"+S.flags.cardsLeftUni+"張）",()=>{S.flags.cardsLeftUni--;hsEventCard(uniMenu);});
     ul.push({label:"能力強化（不耗年度）",small:true,fn:()=>allocMenu(uniMenu)});
     choices(ul,"這一年的重心？");
   };
   uniMenu();
   function uniTrain(mult, st){
     if(S.flags.uniTier==="elite")mult*=1.1; // 名門的運科資源
-    /* 大學一年折算數次主項訓練計數（特訓年4次、均衡3次、學業年2次） */
+    /* 主修制：年度訓練計數集中在你選的練習（特訓年4次、均衡3次、學業年2次），
+       與高中／職業共用同一批 x/N→特性 里程碑，大學也練得出特殊能力 */
     const reps=mult>=1.3?4:mult>=1.0?3:2;
-    const kinds=S.pos==="P"?["nage","henka","kin","str"]:["toss","kin","dash","str"];
-    for(let i=0;i<reps;i++)practiceMilestoneTick(kinds[i%kinds.length]);
+    const mAt=practiceMilestoneAt();
+    const prog=(kind)=>{const r=P40_REWARD[kind];if(!r||S.abil.includes(r))return"";return "・"+(S.pCount[kind]||0)+"/"+mAt+"→"+r;};
+    const kinds=S.pos==="P"?[["nage","牛棚投球"],["shadow","姿勢矯正"],["henka","變化球研究"],["kin","重量訓練"],["run","長跑"]]
+                          :[["toss","特打"],["suburi","揮棒"],["knock","守備"],["dash","衝刺"],["kin","重量訓練"],["run","長跑"]];
+    choices(kinds.map(kd=>({label:"主修「"+kd[1]+"」｜年度訓練計數 +"+(reps-1)+prog(kd[0]),fn:()=>{
+      for(let i=0;i<reps-1;i++)practiceMilestoneTick(kd[0]);
+      practiceMilestoneTick("str");
+      doYear();
+    }})),"這一年的訓練主修？（伸展保養每年固定累積 1 次）");
+    return;
+    function doYear(){
     const m=spGain(Math.round(20*mult),Math.round(18*mult),Math.round(16*mult));
     S.study=Math.min(100,S.study+st);
     gain("年度成長："+m+(st?("　學業+"+st):""));
@@ -4659,6 +4667,7 @@ function uniYear(){
       if(g){ S.fame+=4; S.scout.cpbl+=4; }
       afterUniYear();
     }
+    }
   }
   function afterUniYear(){
     if(S.uniYear===3 && S.fame>=30 && overall()>=50 && !S.flags.uniIntl){
@@ -4676,6 +4685,7 @@ function uniYear(){
     afterUniYear2();
   }
   function afterUniYear2(){
+    if(!S.flags["uniCard"+S.year]&&chance(0.7)){S.flags["uniCard"+S.year]=1;hsEventCard(afterUniYear2);return;}
     if(S.gf){
       const uniGfScenes=[
         GF[S.gf].name+"搭車來看你的大專聯賽，賽後兩人在校門口吃了熱炒。",
@@ -4689,15 +4699,25 @@ function uniYear(){
     next("能力強化與升級", ()=>allocMenu(()=>{ statusBar(); uniDraftDecision(); }));
   }
   function uniDraftDecision(){
-    if(S.uniYear<2){ next("下一年", careerLoop); return; }
+    if(S.uniYear>=4){ next("下一年", careerLoop); return; } /* 大四季末直接接畢業岔路 */
     const ov=overall();
-    const list=[{label:"留在校園，繼續大學生涯",primary:true,fn:()=>next("下一年",careerLoop)}];
-    if(ov>=42||S.scout.cpbl>=18)list.push({label:"提前棄學，投入中職選秀（中退＝以高卒行情評估）",fn:()=>{story("你辦了休學。教練沒多說什麼，只在推薦函上蓋了章。");draftCPBL(false);}});
-    if(ov>=58&&S.scout.npb>=22)list.push({label:"提前旅日（NPB）",fn:()=>signNPB(false)});
-    if(ov>=62&&S.scout.mlb>=22)list.push({label:"提前旅美（MLB）",fn:()=>signMLB(false)});
-    if(list.length===1){ next("下一年", careerLoop); return; }
-    hr();head("大"+S.uniYear+"結束・選秀登記截止前","要不要提前走？");
-    choices(list,"大四畢業投入選秀有「大卒」評價加成；提前中退則以高卒行情計算——早進職業換年輕年資，晚走換更高順位。");
+    /* 大學不是合約：每年球季結束都能走，只是條件與代價攤在檯面上 */
+    const canC=ov>=38||S.scout.cpbl>=14;
+    const canN=ov>=54&&S.scout.npb>=18;
+    const canM=ov>=58&&S.scout.mlb>=18;
+    const stay=()=>next("下一年",careerLoop);
+    const list=[{label:"留在校園，繼續大學生涯｜大四畢業有「大卒」選秀評價加成與學歷保底",primary:true,fn:stay}];
+    list.push(canC
+      ?{label:"提前離校，投入中職選秀｜在學生身分：以當下實力評估、無大卒加成",fn:()=>{story("你辦了離校手續。教練沒多說什麼，只在推薦函上蓋了章。");draftCPBL(false);}}
+      :{label:"提前投入中職選秀｜🔒 條件未達：綜合 38 或中職球探註記 14（目前 "+ov+"／"+S.scout.cpbl+"）",cls:"cant",fn:()=>{sys("球探還沒把你放進名單——用大專聯賽和訓練把數字打上去，明年這扇門還會開。");uniDraftDecision();}});
+    list.push(canN
+      ?{label:"提前旅日（NPB）｜跳過選秀直接簽約",fn:()=>signNPB(false)}
+      :{label:"提前旅日（NPB）｜🔒 條件未達：綜合 54 且日職球探 18（目前 "+ov+"／"+S.scout.npb+"）",cls:"cant",small:true,fn:()=>{sys("日職球探的報告書上還缺一個亮眼的大專球季。");uniDraftDecision();}});
+    list.push(canM
+      ?{label:"提前旅美（MLB）｜跳過選秀直接簽約",fn:()=>signMLB(false)}
+      :{label:"提前旅美（MLB）｜🔒 條件未達：綜合 58 且美職球探 18（目前 "+ov+"／"+S.scout.mlb+"）",cls:"cant",small:true,fn:()=>{sys("越洋的門檻最高。差距，就是接下來一年的功課。");uniDraftDecision();}});
+    hr();head("大"+S.uniYear+"結束・選秀登記截止前","職業的門，每年都開一次");
+    choices(list,"在學離校＝以當下實力評估（無大卒加成），早一年進職業換年輕年資；讀滿四年＝選秀評價加成與退路。這是取捨，不是關卡。");
   }
 }
 function uniGraduate(){
@@ -4908,12 +4928,12 @@ function flushMonthGrowth(s){
   let gK=0,gG=0,gS=0,notes=[];
   if(S.pos==="B"||S.twoWay){
     gG+=cl(d("h")*0.5+d("bb")*0.3); gK+=cl(d("hr")*1.2); gS+=cl(d("sb")*0.9);
-    if(d("hr")>=8&&gainCappedAbility("power",2,S)>0)notes.push("長打手感覺醒（力量微升）");
+    if(d("hr")>=5&&gainCappedAbility("power",2,S)>0)notes.push("長打手感覺醒（力量微升）");
   }
   if(S.pos==="P"){
     gS+=cl(d("so")*0.35); gK+=cl(d("ip")*0.4);
-    if(d("ip")>=45&&gainCappedAbility("stam",2,S)>0)notes.push("吃局數的身體成型（耐力微升）");
-    if(d("so")>=42&&gainCappedAbility("ctrl",2,S)>0)notes.push("解決打者的節奏內化（控球微升）");
+    if(d("ip")>=32&&gainCappedAbility("stam",2,S)>0)notes.push("吃局數的身體成型（耐力微升）");
+    if(d("so")>=30&&gainCappedAbility("ctrl",2,S)>0)notes.push("解決打者的節奏內化（控球微升）");
   }
   if(gK||gG||gS){
     S.expK+=gK;S.expG+=gG;S.expS+=gS;
@@ -4921,13 +4941,30 @@ function flushMonthGrowth(s){
   }
   s.msSnap=null;
 }
+function monthDigest(s){
+  /* 上月戰報：例行賽逐場靜音後，於月底一次結算球隊與個人數據 */
+  if(!s.msSnap)return;
+  const d=k=>Math.max(0,(Number(s[k])||0)-(Number(s.msSnap[k])||0));
+  const gp=d("i");if(gp<=0)return;
+  const parts=["出賽"+gp+"場（球隊 "+d("tw")+"勝"+d("tl")+"敗）"];
+  if(d("batG")>0){
+    const ab=d("ab"),h=d("h");
+    parts.push("打擊 "+(ab?("."+String(Math.round(h/ab*1000)).padStart(3,"0")):"—")+"（"+ab+"打數"+h+"安）"+(d("hr")?d("hr")+"轟 ":"")+(d("rbi")?d("rbi")+"打點 ":"")+(d("sb")?d("sb")+"盜":"")); 
+  }
+  if(d("pitG")>0){
+    const ip=Math.round(d("ip")*10)/10,er=d("er");
+    parts.push("投球 "+ip+"局 ERA "+(ip?(er*9/ip).toFixed(2):"—")+" K"+d("so")+"　"+d("w")+"勝"+d("l")+"敗"+(d("sv")?d("sv")+"救援":"")+(d("hld")?d("hld")+"中繼":""));
+  }
+  hr();out("📊 上月戰報｜"+parts.join("｜"),"game");
+}
 function monthStep(){
   const s=S.sea;
   evalGoal();
+  monthDigest(s);
   flushMonthGrowth(s);
   if(s.i>=s.total){ seasonEnd(); return; }
   s.mi++;
-  s.msSnap={h:s.h,bb:s.bb,hr:s.hr,sb:s.sb,so:s.so,ip:s.ip};
+  s.msSnap={h:s.h,bb:s.bb,hr:s.hr,sb:s.sb,so:s.so,ip:s.ip,ab:s.ab,rbi:s.rbi,pa:s.pa,batG:s.batG,pitG:s.pitG,er:s.er,w:s.w,l:s.l,sv:s.sv,hld:s.hld,tw:s.tw,tl:s.tl,i:s.i};
   s.monthPlan=null; // 每月重設比賽方針
   assignGoal();
   midSeasonCallup();
@@ -4944,17 +4981,28 @@ function proMonthAction(mLabel, monthGames){
   if(S.pos==="P")sys(pitchRoleLabel(effectivePitchRole())+"｜手臂 "+armStatus()+" 可用"+Math.round(S.armHealth.readiness)+"／負荷"+S.armHealth.load.toFixed(1)+"/"+armCap());
   if(S.goal) sys("📋 教練課題：「"+S.goal.txt+"」（達成獎勵：點數＋知名度）");
   const list=[];
-  if(S.pos==="B"||S.twoWay)
-    list.push({label:(S.twoWay?"【打】":"")+"特打加練｜筋6技8敏4・疲勞+"+(S.twoWay?8:6), fn:()=>act(()=>{ const f=S.twoWay?8:6,m=spGain(6,8,4); S.fatigue=Math.min(100,S.fatigue+f); practiceMilestoneTick("toss"); gain(m+"（疲勞+"+f+"）"); })});
-  if(S.pos==="P")
-    list.push({label:(S.twoWay?"【投】":"")+"牛棚加投｜筋5技8變5・疲勞+"+(S.twoWay?8:6)+"・手臂負荷+", fn:()=>act(()=>{ const f=S.twoWay?8:6,m=spGain(5,8,5),a=addArmLoad(35,"norm",0.8); S.fatigue=Math.min(100,S.fatigue+f); practiceMilestoneTick("nage"); gain(m+"（疲勞+"+f+"、手臂負荷+"+a.toFixed(1)+"）"); })});
-  list.push({label:"重量訓練｜筋10 變/敏3・疲勞+5", fn:()=>act(()=>{ const m=spGain(10,0,3); S.fatigue=Math.min(100,S.fatigue+5); practiceMilestoneTick("kin"); gain(m+"（疲勞+5）"); })});
-  list.push({label:"影片研究對手"+(S.flags.analyst?"（小黑加成）":""), fn:()=>act(()=>{ S.sea.monthPerf=S.flags.analyst?0.09:0.06; S.expG+=6; practiceMilestoneTick(S.pos==="P"?"henka":"knock"); gain("技術+6　本月比賽表現+"+(S.flags.analyst?"+（小黑的逐格分析！）":"（研究奏效）")); })});
-  list.push({label:"徹底保養", fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); if(S.pos==="P"){recoverArm(7,true);S.traitCounters.careActions++;} practiceMilestoneTick("str"); gain("疲勞-22、體力+20"+(S.pos==="P"?"、手臂回復":"")); })});
-  (()=>{ const mk=S.year*100+(S.sea?S.sea.mi:0);
-    if(S.flags.cardMonth!==mk){S.flags.cardMonth=mk;S.flags.cardsLeftPro=2;}
-    if(S.flags.cardsLeftPro>0)setCardDraw("抽事件卡（剩"+S.flags.cardsLeftPro+"張）",()=>{S.flags.cardsLeftPro--;proEventCard(()=>proMonthAction(mLabel,monthGames));});
-  })();
+  /* 與高中共用練習體系：同一批訓練計數（x/N→特性），職業也練得出全部特殊能力 */
+  const mAt=practiceMilestoneAt();
+  const prog=(kind)=>{const r=P40_REWARD[kind];if(!r||S.abil.includes(r))return"";return "・"+(S.pCount[kind]||0)+"/"+mAt+"→"+r;};
+  const sN3=S.twoWay?"變/敏":S.pos==="P"?"變":"敏";
+  const trow=(kind,name,k,g,s3,fat,pre,extraFn,extraTxt)=>list.push({label:pre+name+"｜"+[k?"筋"+k:"",g?"技"+g:"",s3?sN3+s3:""].filter(Boolean).join(" ")+"・疲勞+"+fat+prog(kind)+(extraTxt||""),
+    fn:()=>act(()=>{ const m=spGain(k,g,s3); S.fatigue=Math.min(100,S.fatigue+fat); practiceMilestoneTick(kind); if(extraFn)extraFn(); gain(m+"（疲勞+"+fat+"）"); })});
+  const bPre=S.twoWay?"【打】":"",pPre=S.twoWay?"【投】":"";
+  if(S.pos==="B"||S.twoWay){
+    trow("toss","特打加練",6,8,4,S.twoWay?8:6,bPre);
+    trow("suburi","揮棒素振",7,3,0,4,bPre);
+    trow("knock","守備特守",0,8,5,5,bPre);
+    trow("dash","衝刺短跑",1,0,7,4,bPre);
+  }
+  if(S.pos==="P"){
+    trow("nage","牛棚加投",5,8,5,S.twoWay?8:6,pPre,()=>{const a=addArmLoad(35,"norm",0.8);sys("（手臂負荷+"+a.toFixed(1)+"）");},"・手臂負荷+");
+    trow("shadow","姿勢矯正",0,7,1,4,pPre);
+    trow("henka","變化球研究",0,2,8,5,pPre,()=>{const a=addArmLoad(20,"norm",0.5);sys("（手臂負荷+"+a.toFixed(1)+"）");},"・手臂負荷微+");
+  }
+  trow("kin","重量訓練",10,0,3,5,"");
+  trow("run","長跑",3,0,2,4,"",()=>{S.tough=Math.min(20,(S.tough||0)+1);},"・韌+1");
+  list.push({label:"影片研究對手"+(S.flags.analyst?"（小黑加成）":"")+"｜技6・本月比賽表現+", fn:()=>act(()=>{ S.sea.monthPerf=S.flags.analyst?0.09:0.06; S.expG+=6; gain("技術+6　本月比賽表現+"+(S.flags.analyst?"+（小黑的逐格分析！）":"（研究奏效）")); })});
+  list.push({label:"徹底保養｜疲勞-22 體力+20"+(S.pos==="P"?" 手臂回復":"")+prog("str"), fn:()=>act(()=>{ S.fatigue=Math.max(0,S.fatigue-22); S.hp=Math.min(S.maxHp,S.hp+20); if(S.pos==="P"){recoverArm(7,true);S.traitCounters.careActions++;} practiceMilestoneTick("str"); gain("疲勞-22、體力+20"+(S.pos==="P"?"、手臂回復":"")); })});
   if(S.gf||S.married){
     list.push({label:S.married?"陪伴家人":"與"+GF[S.gf].name+"約會", fn:()=>act(()=>{ yarukiUp(2); S.fatigue=Math.max(0,S.fatigue-12); gain("狀態+2、疲勞-12（心的充電）"); })});
   }
@@ -5262,26 +5310,27 @@ function playGame(choice, imp, foe, silent){
   if(battingToday){
     bat=emptyBat();
     const env=leagueEnv();
-    const mR=effRating("meet",S),pR=effRating("power",S),rR=effRating("run",S);
-    const eMeet=fxv("meet"),ePower=fxv("power"),eRun=fxv("run");
-    /* 打擊率＝接觸主導（權重約65%）：接觸爛的大砲AVG會掉到.23以下，靠轟吃飯（TTO） */
-    const pHit=Math.max(0.09,Math.min(0.40,0.09+mR*0.0019+pR*0.0004+rR*0.0002+pm*0.10+traitGameEdge({keyGame:imp>=2,batting:true})+env.hit+(S.traj===1?0.006:S.traj>=3?-(S.traj-2)*0.006:0)));
+    const LS=leagueShift();
+    const mR=effRating("meet",S)+LS,pR=effRating("power",S)+LS,rR=effRating("run",S)+LS,eyR=effRating("eye",S)+LS;
+    /* 打擊率＝接觸主導、相對錨點：85＝該層級平均（一軍原始100）、100＝打擊王線（原始115）。
+       斜率 0.0045/點：B級接觸=好打者、A級=打擊王候補；單邊型（接觸B其餘D）只是「有一技之長」而非怪物。 */
+    const pHit=Math.max(0.06,Math.min(0.40,0.272+(mR-85)*0.0045+(pR-85)*0.0004+(rR-85)*0.0002+pm*0.10+traitGameEdge({keyGame:imp>=2,batting:true})+env.hit+(S.traj===1?0.006:S.traj>=3?-(S.traj-2)*0.006:0)));
     const pa=4;
     for(let j=0;j<pa;j++){
       bat.pa++;
-      if(chance(Math.max(0.02,0.03+fxv("eye")*0.0065+(S.abil.includes("選球眼")||S.abil.includes("鷹眼")?0.015:0)+(S.abil.includes("纏鬥打擊")?0.008:0)))){bat.bb++;continue;}
+      if(chance(Math.max(0.02,Math.min(0.16,0.033+(eyR-55)*0.0017)+(S.abil.includes("選球眼")||S.abil.includes("鷹眼")?0.015:0)+(S.abil.includes("纏鬥打擊")?0.008:0)))){bat.bb++;continue;}
       bat.ab++;
       if(chance(pHit)){
         bat.h++;
-        /* HR率：力量評級100≈中職轟王、110日職、120美職（環境倍率反推自真實領先數據） */
-        if(chance(Math.min(0.34,(ePower/1180+(S.traj-2)*0.010+(choice==="full"?0.02:0))*env.hrMul))){bat.hr++;bat.rbi+=1+ri(0,2);}
+        /* HR率（相對錨點）：力量85＝層級平均約12轟、100＝王者線（原始115＝中職轟王、124日職、133美職） */
+        if(chance(Math.max(0.005,Math.min(0.34,(0.1026+(pR-85)*0.0081+(S.traj-2)*0.012+(choice==="full"?0.015:0))*env.hrMul)))){bat.hr++;bat.rbi+=1+ri(0,2);}
         else {if(chance(0.22)){bat.d2++;}if(chance(0.3))bat.rbi++;}
-      }else if(chance(Math.max(0.07,0.30-eMeet*0.014-Math.max(0,fxv("eye")-8)*0.004+env.k+(S.traj>=3?(S.traj-2)*0.008:0))))bat.so++;
+      }else if(chance(Math.max(0.06,0.19-(mR-85)*0.0028-Math.max(0,eyR-90)*0.003+env.k+(S.traj>=3?(S.traj-2)*0.008:0))))bat.so++;
     }
     if((bat.h+bat.bb)>0){
-      const sbAtt=Math.max(0.03,(eRun-5)*0.02)+(S.abil.includes("盜壘○")?0.07:0)+(S.abil.includes("積極派")?0.02:0)-(S.abil.includes("慎重派")?0.015:0);
+      const sbAtt=Math.max(0.02,(rR-78)*0.004)+(S.abil.includes("盜壘○")?0.07:0)+(S.abil.includes("積極派")?0.02:0)-(S.abil.includes("慎重派")?0.015:0);
       if(chance(sbAtt)){
-        const sbOK=Math.max(0.25,Math.min(0.92,0.45+eRun*0.03+(S.abil.includes("盜壘○")?0.15:0)-imp*0.02-env.pitQ*0.004));
+        const sbOK=Math.max(0.25,Math.min(0.92,0.45+(rR-85)*0.004+(S.abil.includes("盜壘○")?0.15:0)-imp*0.02-env.pitQ*0.004));
         if(chance(sbOK)){bat.sb=1;S.flags.tSB=(S.flags.tSB||0)+1;}
         else{bat.cs=1;s.cs=(s.cs||0)+1;}
       }
@@ -5293,14 +5342,15 @@ function playGame(choice, imp, foe, silent){
   if(pitchingToday){
     const envP=leagueEnv(),ars=pitchArsenalAvg(S);
     /* 細緻投球戰力（0-140+）＋表現/手臂/球種修正；聯盟環境由真實數據反推 */
-    const pq=pitchQuality(S)+pm*30+armPerformanceMod()*40+(ars.plat+ars.k)*90;
+    const pq=pitchQuality(S)+leagueShift()+pm*30+armPerformanceMod()*40+(ars.plat+ars.k)*90;
     const cap=pitcherCapacity(role,choice);
     const ip=role==="SP"?Math.max(3,Math.min(8,Math.round(3+effRating("stam",S)*0.028+pq*0.008))):role==="CL"?1:Math.max(1,Math.min(3,Math.round(cap/18)));
-    const roleBase=(role==="SP"?4.9:2.3)+envP.eraAdd*(role==="SP"?1:0.5)-ars.gb*2.4;
-    const er=Math.max(0,Math.round((roleBase-pq/28)*(ip/(role==="SP"?6:2))+rnd()*2-0.5));
-    const so=Math.max(0,Math.round(ip*Math.max(0.3,(0.2+pq*0.008+ars.k*1.2))*envP.kMul+rnd()*2-1));
-    const h=Math.max(1,Math.round(ip*(0.7+Math.max(0,100-pq)*0.006)+rnd()*2));
-    const bb=Math.max(0,Math.round(ip*(0.16+Math.max(0,95-effRating("ctrl",S))*0.0035)+rnd()));
+    /* v2 錨點曲線：層級平均 pq≈90 → ERA≈4.0、K/9≈7；王者線 pq≈105 → ERA≈2.1、K/9≈8-10（各聯盟再乘風格差） */
+    const roleBase=(role==="SP"?9.8:8.0)+envP.eraAdd*(role==="SP"?1:0.5)-ars.gb*2.4;
+    const er=Math.max(0,Math.round((roleBase-pq/11.8)*(ip/(role==="SP"?6:2))+rnd()*2-0.5));
+    const so=Math.max(0,Math.round(ip*Math.max(0.25,(-0.54+pq*0.0146+ars.k*1.2))*envP.kMul+rnd()*2-1));
+    const h=Math.max(1,Math.round(ip*(0.72+Math.max(0,108-pq)*0.016)+rnd()*2));
+    const bb=Math.max(0,Math.round(ip*(0.16+Math.max(0,95-(effRating("ctrl",S)+leagueShift()))*0.0035)+rnd()));
     pit={outs:ip*3,h:h,bb:bb,so:so,er:er,np:Math.min(cap+5,Math.round(ip*(13+bb*0.6)+ri(0,8))),w:0,l:0,sv:0,hld:0};
     s.pitG++;s.ip+=ip;s.outs+=pit.outs;s.ha+=h;s.pbb+=bb;s.er+=er;s.so+=so;s.np+=pit.np;
     goodPit=role==="SP"?er<=2&&ip>=5:er===0;
@@ -5318,7 +5368,8 @@ function playGame(choice, imp, foe, silent){
     competitionKey:ck,editionKey:ck+"."+S.year,roundKey:"game"+gameNo,team:S.team,league:S.league,level:S.level,
     opponent:foe,result:teamWin?"W":"L",score:teamWin?[1,0]:[0,1],bat:bat,pit:pit,pitchRole:pit?role:null});
   const impTag = imp>=2?"【關鍵戰】":"";
-  if(!silent){
+  /* 例行賽逐場戰報不再洗版：只有關鍵戰即時顯示，其餘統一在月底「上月戰報」結算 */
+  if(!silent&&imp>=2){
     gameLine("　第"+s.i+"戰 "+impTag+"vs "+foe+"："+(teamWin?"勝":"敗")+"　你："+parts.join("／"));
   }
   // 關鍵戰獎懲
@@ -5341,7 +5392,7 @@ function playGame(choice, imp, foe, silent){
     if(pit.sv)S.flags.tSVcount=(S.flags.tSVcount||0)+1;
     if(role==="SP"&&pit.outs>=24)S.flags.tCG=(S.flags.tCG||0)+1;
     const armGain=addArmLoad(pit.np,choice,1);
-    if(!silent)sys("手臂帳本："+pit.np+"球，長期負荷+"+armGain.toFixed(1)+"；目前"+S.armHealth.load.toFixed(1)+"/"+armCap()+"，短期可用"+Math.round(S.armHealth.readiness)+"/100。");
+    if(!silent&&imp>=2)sys("手臂帳本："+pit.np+"球，長期負荷+"+armGain.toFixed(1)+"；目前"+S.armHealth.load.toFixed(1)+"/"+armCap()+"，短期可用"+Math.round(S.armHealth.readiness)+"/100。");
     if(resolveArmCrisis(nextGame,{forced:false,sea:s}))return null;
   }else if(S.pos==="P")recoverArm(1,false); // 二刀流非登板日仍會隨賽程恢復手臂
   // 隨機事件
@@ -5425,10 +5476,29 @@ const AWARD_LEAGUE_BASE={
 /* 由真實領先數據反推：美職＝高三振低打擊率高全壘打環境、線最高；日職居中；中職打者友善。
    pitQ 僅用於盜壘（捕手阻殺水準）。 */
 const LEAGUE_ENV={
+  /* v2：層級難度已由 leagueShift 錨點承擔，env 只保留「聯盟風格差」（日美偏投、飛球環境等） */
   CPBL:{hit:0,hrMul:1.0,k:0,pitQ:0,eraAdd:0,kMul:1},
-  NPB:{hit:-0.025,hrMul:1.15,k:0.05,pitQ:6,eraAdd:0.16,kMul:0.97},
-  MLB:{hit:-0.04,hrMul:1.28,k:0.09,pitQ:12,eraAdd:0.85,kMul:0.93}
+  NPB:{hit:-0.018,hrMul:1.30,k:0.012,pitQ:6,eraAdd:0.10,kMul:1.05},
+  MLB:{hit:-0.024,hrMul:1.45,k:0.035,pitQ:12,eraAdd:0.35,kMul:1.30}
 };
+/* 評級錨點 v2：各聯盟／層級的「平均戰力」重定位。
+   設計：綜合/單項 100＝中職一軍平均、110＝日職一軍平均、120＝美職大聯盟平均。
+   王者線（單項）：中職轟王/打擊王≈115、日職≈124、美職≈133（以 2025 真實領先數據反推）。
+   shift 加在有效評級上：一軍為負（環境強、數據被壓），低層級為正（環境弱、數據膨脹）。 */
+function leagueShift(){
+  if(!S||S.phase!=="pro")return 0;
+  const lg=S.league,lv=String(S.level||"");
+  if(lg==="CPBL")return lv==="一軍"?-15:-3;
+  if(lg==="NPB")return lv==="一軍"?-25:-13;
+  if(lg==="MLB"){
+    if(lv==="MLB")return -35;
+    if(lv==="AAA"||lv==="3A")return -19;
+    if(lv==="AA"||lv==="2A")return -13;
+    if(/^A/.test(lv)||lv==="1A"||lv==="高階1A")return -7;
+    return 0; /* 新人聯盟／Rookie＝業餘頂級生等價 */
+  }
+  return 0;
+}
 function leagueEnv(){ return LEAGUE_ENV[S.league]||LEAGUE_ENV.CPBL; }
 function awardLeagueBase(league){return AWARD_LEAGUE_BASE[league]||AWARD_LEAGUE_BASE.CPBL;}
 function awardLeagueName(league){return awardLeagueBase(league).name;}
@@ -5781,23 +5851,24 @@ function quickEventBat(choice,diff){
   if(!(S.pos==="B"||S.twoWay))return null;
   const b=emptyBat(),pa=4;
   const mod=choice==="full"?0.035:choice==="rest"?-0.045:0;
-  const env=leagueEnv();
-  const pHit=Math.max(0.08,Math.min(0.40,0.07+effRating("meet",S)*0.0019+effRating("power",S)*0.0004-diff*0.012+mod+env.hit));
+  const env=leagueEnv(),LSq=leagueShift();
+  const mQ=effRating("meet",S)+LSq,pQ=effRating("power",S)+LSq,eyQ=effRating("eye",S)+LSq;
+  const pHit=Math.max(0.06,Math.min(0.40,0.262+(mQ-85)*0.0045+(pQ-85)*0.0004-diff*0.012+mod+env.hit));
   for(let i=0;i<pa;i++){
     b.pa++;
-    if(chance(0.06+fxv("meet")*0.002)){b.bb++;continue;}
+    if(chance(Math.max(0.02,Math.min(0.16,0.033+(eyQ-55)*0.0017)))){b.bb++;continue;}
     b.ab++;
-    if(chance(pHit)){b.h++;if(chance(Math.min(0.3,(fxv("power")/1180+(S.traj-2)*0.010+mod)*env.hrMul))){b.hr++;b.rbi+=1+ri(0,2);}else{if(chance(0.22))b.d2++;if(chance(0.3))b.rbi++;}}
-    else if(chance(Math.max(0.08,0.3-fxv("meet")*0.012+env.k)))b.so++;
+    if(chance(pHit)){b.h++;if(chance(Math.max(0.005,Math.min(0.3,(0.1026+(pQ-85)*0.0081+(S.traj-2)*0.012+mod)*env.hrMul)))){b.hr++;b.rbi+=1+ri(0,2);}else{if(chance(0.22))b.d2++;if(chance(0.3))b.rbi++;}}
+    else if(chance(Math.max(0.06,0.19-(mQ-85)*0.0028+env.k)))b.so++;
   }
-  if((b.h+b.bb)>0&&chance(Math.max(0.02,(fxv("run")-5)*0.015)))b.sb=1;
+  if((b.h+b.bb)>0&&chance(Math.max(0.02,(effRating("run",S)+LSq-78)*0.004)))b.sb=1;
   return b;
 }
 function quickEventPit(choice,diff,innings){
   if(S.pos!=="P")return null;
   const role=effectivePitchRole();if(role==="OUT")return null;
   const mod=choice==="full"?0.7:choice==="rest"?-0.8:0;
-  const q=pitchQuality(S)/22-diff*0.12+mod+armPerformanceMod()*2-leagueEnv().eraAdd*0.6;
+  const q=(pitchQuality(S)+leagueShift())/22-diff*0.12+mod+armPerformanceMod()*2-leagueEnv().eraAdd*0.6;
   const cap=pitcherCapacity(role,choice),ip=Math.max(1,Math.min(innings||3,role==="SP"?Math.floor(cap/15):role==="CL"?1:Math.max(1,Math.floor(cap/16))));
   const er=Math.max(0,Math.round(3.2-q*0.55+rnd()*2));
   return {outs:ip*3,h:Math.max(1,Math.round(ip*(0.7+diff*0.035)+rnd())),bb:Math.max(0,Math.round(ip*0.25+rnd())),
